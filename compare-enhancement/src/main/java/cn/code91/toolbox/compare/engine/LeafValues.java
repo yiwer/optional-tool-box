@@ -3,9 +3,6 @@ package cn.code91.toolbox.compare.engine;
 import cn.code91.facility.date.DateUtil;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.time.temporal.TemporalAccessor;
 
 /**
@@ -53,14 +50,5 @@ final class LeafValues {
             return bd1.compareTo(bd2) == 0;
         }
         return java.util.Objects.equals(a, b);
-    }
-
-    /**
-     * 校验类型是否受支持的日期时间叶子类型（供文档/测试自检使用）。
-     */
-    static boolean isSupportedTemporal(Class<?> type) {
-        return LocalDate.class.isAssignableFrom(type)
-                || LocalDateTime.class.isAssignableFrom(type)
-                || OffsetDateTime.class.isAssignableFrom(type);
     }
 }

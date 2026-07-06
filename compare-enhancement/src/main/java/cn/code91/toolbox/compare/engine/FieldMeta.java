@@ -19,23 +19,17 @@ record FieldMeta(String name, String label, MethodHandle getter, ValueComparator
         try {
             return getter.invoke(target);
         } catch (Throwable e) {
-            throw new FieldReadException(name, e);
+            throw new FieldReadException(e);
         }
     }
 
     /**
-     * 字段读取失败时抛出，携带字段名供上层转换为 {@link cn.code91.toolbox.compare.core.FieldAccessError}。
+     * 字段读取失败时抛出的内部短路信号，由调用方（{@link cn.code91.toolbox.compare.engine.ReflectionDiffEngine}）
+     * 捕获后结合当前遍历路径转换为 {@link cn.code91.toolbox.compare.core.FieldAccessError}。
      */
     static final class FieldReadException extends RuntimeException {
-        private final String fieldName;
-
-        FieldReadException(String fieldName, Throwable cause) {
+        FieldReadException(Throwable cause) {
             super(cause.getMessage(), cause);
-            this.fieldName = fieldName;
-        }
-
-        String fieldName() {
-            return fieldName;
         }
     }
 

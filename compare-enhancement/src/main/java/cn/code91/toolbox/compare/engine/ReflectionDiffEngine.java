@@ -31,19 +31,29 @@ public final class ReflectionDiffEngine implements DiffEngine {
     private final CompareHandlerRegistry registry;
     private final ClassMetaCache metaCache = new ClassMetaCache();
     private final String datePattern;
+    private final DiffOptions defaultOptions;
 
     public ReflectionDiffEngine(CompareHandlerRegistry registry) {
         this(registry, DEFAULT_DATE_PATTERN);
     }
 
     public ReflectionDiffEngine(CompareHandlerRegistry registry, String datePattern) {
+        this(registry, datePattern, DiffOptions.defaults());
+    }
+
+    /**
+     * @param defaultOptions 无显式 {@link DiffOptions} 参数的 {@link #diff(Object, Object)} 重载所采用的默认选项
+     *                        （对接 {@code toolbox.compare.max-depth}/{@code null-as-empty} 等配置）。
+     */
+    public ReflectionDiffEngine(CompareHandlerRegistry registry, String datePattern, DiffOptions defaultOptions) {
         this.registry = Objects.requireNonNull(registry, "registry cannot be null");
         this.datePattern = Objects.requireNonNull(datePattern, "datePattern cannot be null");
+        this.defaultOptions = Objects.requireNonNull(defaultOptions, "defaultOptions cannot be null");
     }
 
     @Override
     public <T> Result<DiffResult, CompareError> diff(T oldValue, T newValue) {
-        return diff(oldValue, newValue, DiffOptions.defaults());
+        return diff(oldValue, newValue, defaultOptions);
     }
 
     @Override
@@ -96,13 +106,13 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 throw new CompareAbortException(TypeMismatch.of(path, oldType, newType));
             }
 
-            ValueComparator<Object> customComparator = registry.findComparator((Class<Object>) oldType);
+            ValueComparator<Object> customComparator = findTypeComparator(oldType);
             if (LeafValues.isLeaf(oldType) || customComparator != null) {
                 compareLeaf(path, label, oldValue, newValue, customComparator, changes);
                 return;
             }
             if (oldValue instanceof Map<?, ?> || newValue instanceof Map<?, ?>) {
-                compareMap(path, (Map<Object, Object>) oldValue, (Map<Object, Object>) newValue, depth, changes);
+                compareMap(path, asObjectMap(oldValue), asObjectMap(newValue), depth, changes);
                 return;
             }
             if (oldType.isArray() || oldValue instanceof List<?>) {
@@ -110,6 +120,37 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 return;
             }
             compareObjectGraph(path, oldValue, newValue, depth, changes);
+        }
+
+        /**
+         * 类型级比较器按运行时 Class 查找；注册表内部以 {@code Class<?>} 为键，
+         * 取出的比较器与 {@code type} 实参在运行时天然匹配，强转安全。
+         */
+        @SuppressWarnings("unchecked")
+        private ValueComparator<Object> findTypeComparator(Class<?> type) {
+            return registry.findComparator((Class<Object>) type);
+        }
+
+        /**
+         * Map 字段在反射读取时已知其声明类型为 {@code Map<?,?>}；key 相同则值走同一套
+         * 递归 compare，运行时不关心具体键值类型，强转到 {@code Map<Object,Object>} 仅为消除签名噪音。
+         */
+        @SuppressWarnings("unchecked")
+        private Map<Object, Object> asObjectMap(Object value) {
+            return (Map<Object, Object>) value;
+        }
+
+        /**
+         * 展示文本渲染：应用注册的类型级 {@link cn.code91.toolbox.compare.spi.ValueFormatter} 优先，
+         * 未注册时回退 {@link LeafValues#toText} 内置规则（日期时间走 facility DateUtil，其余 toString）。
+         */
+        @SuppressWarnings("unchecked")
+        private String renderText(Object value) {
+            if (value == null) {
+                return null;
+            }
+            var formatter = registry.findFormatter((Class<Object>) value.getClass());
+            return formatter != null ? formatter.format(value) : LeafValues.toText(value, datePattern);
         }
 
         /**
@@ -124,7 +165,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 return;
             }
             changes.add(new FieldChange(path, label, ChangeKind.MODIFIED, oldValue, newValue,
-                    LeafValues.toText(oldValue, datePattern), LeafValues.toText(newValue, datePattern)));
+                    renderText(oldValue), renderText(newValue)));
         }
 
         /**
@@ -136,7 +177,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 return;
             }
             changes.add(new FieldChange(path, label, ChangeKind.MODIFIED, oldValue, newValue,
-                    LeafValues.toText(oldValue, datePattern), LeafValues.toText(newValue, datePattern)));
+                    renderText(oldValue), renderText(newValue)));
         }
 
         private void compareObjectGraph(String path, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
@@ -203,26 +244,28 @@ public final class ReflectionDiffEngine implements DiffEngine {
             return value;
         }
 
+        /**
+         * oldMap/newMap 均由 {@link #compare} 保证非 null（双侧任一为 null 时已在上一层
+         * 归为 ADDED/REMOVED 提前返回，不会走到这里），因此无需再做 null 兜底。
+         */
         private void compareMap(String path, Map<Object, Object> oldMap, Map<Object, Object> newMap,
                                  int depth, List<FieldChange> changes) {
-            Map<Object, Object> safeOld = oldMap == null ? Map.of() : oldMap;
-            Map<Object, Object> safeNew = newMap == null ? Map.of() : newMap;
-            for (Map.Entry<Object, Object> entry : safeOld.entrySet()) {
+            for (Map.Entry<Object, Object> entry : oldMap.entrySet()) {
                 Object key = entry.getKey();
                 String elementPath = path + "[" + key + "]";
-                if (!safeNew.containsKey(key)) {
+                if (!newMap.containsKey(key)) {
                     changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, entry.getValue(), null,
-                            LeafValues.toText(entry.getValue(), datePattern), null));
+                            renderText(entry.getValue()), null));
                 }
             }
-            for (Map.Entry<Object, Object> entry : safeNew.entrySet()) {
+            for (Map.Entry<Object, Object> entry : newMap.entrySet()) {
                 Object key = entry.getKey();
                 String elementPath = path + "[" + key + "]";
-                if (!safeOld.containsKey(key)) {
+                if (!oldMap.containsKey(key)) {
                     changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, entry.getValue(),
-                            null, LeafValues.toText(entry.getValue(), datePattern)));
+                            null, renderText(entry.getValue())));
                 } else {
-                    compare(elementPath, elementPath, safeOld.get(key), entry.getValue(), depth + 1, changes);
+                    compare(elementPath, elementPath, oldMap.get(key), entry.getValue(), depth + 1, changes);
                 }
             }
         }
@@ -238,23 +281,23 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 Object removed = oldList.get(i);
                 String elementPath = path + "[" + i + "]";
                 changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, removed, null,
-                        LeafValues.toText(removed, datePattern), null));
+                        renderText(removed), null));
             }
             for (int i = commonSize; i < newList.size(); i++) {
                 Object added = newList.get(i);
                 String elementPath = path + "[" + i + "]";
                 changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, added,
-                        null, LeafValues.toText(added, datePattern)));
+                        null, renderText(added)));
             }
         }
 
         private void recordAddedOrRemoved(String path, String label, Object oldValue, Object newValue, List<FieldChange> changes) {
             if (oldValue == null) {
                 changes.add(new FieldChange(path, label, ChangeKind.ADDED, null, newValue,
-                        null, LeafValues.toText(newValue, datePattern)));
+                        null, renderText(newValue)));
             } else {
                 changes.add(new FieldChange(path, label, ChangeKind.REMOVED, oldValue, null,
-                        LeafValues.toText(oldValue, datePattern), null));
+                        renderText(oldValue), null));
             }
         }
     }

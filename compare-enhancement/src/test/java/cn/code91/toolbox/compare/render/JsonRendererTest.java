@@ -7,10 +7,10 @@ import cn.code91.toolbox.compare.core.CompareError;
 import cn.code91.toolbox.compare.core.DiffResult;
 import cn.code91.toolbox.compare.core.FieldChange;
 import cn.code91.toolbox.compare.core.RenderError;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,12 +34,13 @@ class JsonRendererTest {
         assertThat(result.isOk()).isTrue();
         String json = result.get();
 
-        Result<List<Map<String, Object>>, ?> roundTrip = JsonUtil.deserializeToList(json, (Class<Map<String, Object>>) (Class<?>) Map.class);
+        Result<JsonNode, ?> roundTrip = JsonUtil.parseTree(json);
         assertThat(roundTrip.isOk()).isTrue();
-        List<Map<String, Object>> parsed = roundTrip.get();
+        JsonNode parsed = roundTrip.get();
         assertThat(parsed).hasSize(2);
-        assertThat(parsed.get(0)).containsEntry("path", "amount").containsEntry("label", "订单金额");
-        assertThat(parsed.get(1)).containsEntry("kind", "ADDED");
+        assertThat(parsed.get(0).get("path").asText()).isEqualTo("amount");
+        assertThat(parsed.get(0).get("label").asText()).isEqualTo("订单金额");
+        assertThat(parsed.get(1).get("kind").asText()).isEqualTo("ADDED");
     }
 
     @Test

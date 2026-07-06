@@ -75,6 +75,13 @@
                 <version>${archunit.version}</version>
             </dependency>
             <dependency>
+                <!-- archunit-junit5 传递依赖 archunit 核心库；模块若直接使用核心 API（如 SliceAssignment）
+                     需显式声明该依赖，此前未被 dependencyManagement 收口，版本对齐同一 archunit.version。 -->
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>p6spy</groupId>
                 <artifactId>p6spy</artifactId>
                 <version>${p6spy.version}</version>
