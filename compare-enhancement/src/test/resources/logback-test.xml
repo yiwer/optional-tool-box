@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      JsonRendererTest 故意构造自引用对象逼出序列化失败以验证 RenderError 映射；
+      facility Jsons.serialize 对该场景固定打印 WARN + 堆栈，属预期行为而非缺陷，
+      测试作用域内调至 OFF 避免堆栈噪音污染 mvn verify 输出。
+    -->
+    <logger name="cn.code91.facility.json" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
