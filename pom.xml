@@ -31,6 +31,9 @@
         <p6spy.version>3.9.1</p6spy.version>
         <postgresql.version>42.7.8</postgresql.version>
         <greenmail.version>2.1.3</greenmail.version>
+        <!-- server-facility 自身将 tika-core 声明为 optional（不透传）；storage-enhancement 的
+             上传守卫直接使用 MimeTyping（内部依赖 Tika），版本对齐 server-facility 实测所用版本。 -->
+        <tika.version>3.2.3</tika.version>
     </properties>
 
     <dependencyManagement>
@@ -68,6 +71,14 @@
                 <groupId>com.aliyun.oss</groupId>
                 <artifactId>aliyun-sdk-oss</artifactId>
                 <version>${aliyun-sdk-oss.version}</version>
+            </dependency>
+            <dependency>
+                <!-- server-facility 的 MimeTyping 内部硬依赖 Tika（其自身 pom 声明 optional，不透传）；
+                     storage-enhancement 的上传守卫直接调用 MimeTyping，同样以 optional 声明，
+                     版本收口于此，对齐 server-facility 实测所用版本，避免消费方引入时版本漂移。 -->
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>${tika.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.tngtech.archunit</groupId>
