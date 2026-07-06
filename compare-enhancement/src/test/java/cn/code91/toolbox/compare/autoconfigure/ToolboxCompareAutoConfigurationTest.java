@@ -42,6 +42,17 @@ class ToolboxCompareAutoConfigurationTest {
     }
 
     @Test
+    void unconfiguredPropertiesBindToDocumentedDefaults() {
+        contextRunner.run(context -> {
+            ToolboxCompareProperties properties = context.getBean(ToolboxCompareProperties.class);
+
+            assertThat(properties.maxDepth()).as("未配置 max-depth 时应回退 8，而非 int 原生默认值 0").isEqualTo(8);
+            assertThat(properties.nullAsEmpty()).isFalse();
+            assertThat(properties.datePattern()).isEqualTo("yyyy-MM-dd HH:mm:ss");
+        });
+    }
+
+    @Test
     void enabledFalseAssemblesNothing() {
         contextRunner.withPropertyValues("toolbox.compare.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(DiffEngine.class);
