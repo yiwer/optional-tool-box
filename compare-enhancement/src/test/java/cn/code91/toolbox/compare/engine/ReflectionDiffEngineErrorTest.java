@@ -16,6 +16,10 @@ import cn.code91.toolbox.compare.testfixtures.SelfRefBean;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,6 +120,53 @@ class ReflectionDiffEngineErrorTest {
         assertThat(result.isErr()).isTrue();
         assertThat(result.getErr()).isInstanceOf(FieldAccessError.class);
         assertThat(result.getErr().path()).isEqualTo("risky");
+    }
+
+    @Test
+    void selfReferencingListReturnsCycleDetectedInsteadOfStackOverflow() {
+        List<Object> before = new ArrayList<>();
+        before.add(before); // List 直接包含自身
+        List<Object> after = new ArrayList<>();
+        after.add(after);
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after);
+
+        assertThat(result.isErr()).as("纯集合自引用必须收敛为 CycleDetected，而非 StackOverflowError").isTrue();
+        assertThat(result.getErr()).isInstanceOf(CycleDetected.class);
+    }
+
+    @Test
+    void selfReferencingMapReturnsCycleDetectedInsteadOfStackOverflow() {
+        Map<String, Object> before = new HashMap<>();
+        before.put("self", before); // Map value 引用回该 Map 自身
+        Map<String, Object> after = new HashMap<>();
+        after.put("self", after);
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after);
+
+        assertThat(result.isErr()).as("Map 自引用必须收敛为 CycleDetected，而非 StackOverflowError").isTrue();
+        assertThat(result.getErr()).isInstanceOf(CycleDetected.class);
+    }
+
+    @Test
+    void collectionOnlyDeepNestingExceedsMaxDepth() {
+        // 仅由 List 嵌套构成的深结构（无普通对象边），深度检测必须同样生效。
+        Object before = nestedList(6, "old");
+        Object after = nestedList(6, "new");
+        DiffOptions options = new DiffOptions(3, false, Set.of(), Set.of());
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after, options);
+
+        assertThat(result.isErr()).as("纯集合嵌套超过 maxDepth 应返回 DepthExceeded，而非静默递归到底").isTrue();
+        assertThat(result.getErr()).isInstanceOf(DepthExceeded.class);
+    }
+
+    private static Object nestedList(int levels, String leaf) {
+        Object current = leaf;
+        for (int i = 0; i < levels; i++) {
+            current = List.of(current);
+        }
+        return current;
     }
 
     private static ChainBean buildChain(int length) {

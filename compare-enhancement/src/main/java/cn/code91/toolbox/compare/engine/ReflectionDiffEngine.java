@@ -180,7 +180,14 @@ public final class ReflectionDiffEngine implements DiffEngine {
                     renderText(oldValue), renderText(newValue)));
         }
 
-        private void compareObjectGraph(String path, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
+        /**
+         * 深度上限 + 环检测防线（01 §4.3 的对象图全局保障）：对象图的每一种递归展开边——
+         * 嵌套对象、Map value、List/数组元素——进入前都必须过这道检查，并把容器/对象本身
+         * 登记进递归栈；否则纯集合自引用（List 含自身、Map value 引用回自身）会绕过防线
+         * 导致 StackOverflowError。与 {@link #exitGraphNode} 必须成对（finally 出栈），
+         * 保证兄弟节点复用同一实例时不会误报环。
+         */
+        private void enterGraphNode(String path, Object oldValue, Object newValue, int depth) {
             if (depth >= options.maxDepth()) {
                 throw new CompareAbortException(DepthExceeded.of(path, options.maxDepth()));
             }
@@ -189,13 +196,21 @@ public final class ReflectionDiffEngine implements DiffEngine {
             }
             recursionStack.put(oldValue, Boolean.TRUE);
             recursionStack.put(newValue, Boolean.TRUE);
+        }
+
+        private void exitGraphNode(Object oldValue, Object newValue) {
+            recursionStack.remove(oldValue);
+            recursionStack.remove(newValue);
+        }
+
+        private void compareObjectGraph(String path, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
+            enterGraphNode(path, oldValue, newValue, depth);
             try {
                 for (FieldMeta field : metaCache.fieldsOf(oldValue.getClass())) {
                     compareField(path, field, oldValue, newValue, depth, changes);
                 }
             } finally {
-                recursionStack.remove(oldValue);
-                recursionStack.remove(newValue);
+                exitGraphNode(oldValue, newValue);
             }
         }
 
@@ -247,47 +262,62 @@ public final class ReflectionDiffEngine implements DiffEngine {
         /**
          * oldMap/newMap 均由 {@link #compare} 保证非 null（双侧任一为 null 时已在上一层
          * 归为 ADDED/REMOVED 提前返回，不会走到这里），因此无需再做 null 兜底。
+         * Map 本身作为对象图节点入栈：value 引用回该 Map 时经 {@link #enterGraphNode} 报环。
          */
         private void compareMap(String path, Map<Object, Object> oldMap, Map<Object, Object> newMap,
                                  int depth, List<FieldChange> changes) {
-            for (Map.Entry<Object, Object> entry : oldMap.entrySet()) {
-                Object key = entry.getKey();
-                String elementPath = path + "[" + key + "]";
-                if (!newMap.containsKey(key)) {
-                    changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, entry.getValue(), null,
-                            renderText(entry.getValue()), null));
+            enterGraphNode(path, oldMap, newMap, depth);
+            try {
+                for (Map.Entry<Object, Object> entry : oldMap.entrySet()) {
+                    Object key = entry.getKey();
+                    String elementPath = path + "[" + key + "]";
+                    if (!newMap.containsKey(key)) {
+                        changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, entry.getValue(), null,
+                                renderText(entry.getValue()), null));
+                    }
                 }
-            }
-            for (Map.Entry<Object, Object> entry : newMap.entrySet()) {
-                Object key = entry.getKey();
-                String elementPath = path + "[" + key + "]";
-                if (!oldMap.containsKey(key)) {
-                    changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, entry.getValue(),
-                            null, renderText(entry.getValue())));
-                } else {
-                    compare(elementPath, elementPath, oldMap.get(key), entry.getValue(), depth + 1, changes);
+                for (Map.Entry<Object, Object> entry : newMap.entrySet()) {
+                    Object key = entry.getKey();
+                    String elementPath = path + "[" + key + "]";
+                    if (!oldMap.containsKey(key)) {
+                        changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, entry.getValue(),
+                                null, renderText(entry.getValue())));
+                    } else {
+                        compare(elementPath, elementPath, oldMap.get(key), entry.getValue(), depth + 1, changes);
+                    }
                 }
+            } finally {
+                exitGraphNode(oldMap, newMap);
             }
         }
 
+        /**
+         * 入栈登记必须用原始 oldValue/newValue（数组经 {@link #toList} 会被包一层新 ArrayList，
+         * 若登记包装列表，元素引用回原容器时按 identity 查不到、环检测失效）。
+         */
         private void compareIndexedCollection(String path, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
-            List<Object> oldList = toList(oldValue);
-            List<Object> newList = toList(newValue);
-            int commonSize = Math.min(oldList.size(), newList.size());
-            for (int i = 0; i < commonSize; i++) {
-                compare(path + "[" + i + "]", path + "[" + i + "]", oldList.get(i), newList.get(i), depth + 1, changes);
-            }
-            for (int i = commonSize; i < oldList.size(); i++) {
-                Object removed = oldList.get(i);
-                String elementPath = path + "[" + i + "]";
-                changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, removed, null,
-                        renderText(removed), null));
-            }
-            for (int i = commonSize; i < newList.size(); i++) {
-                Object added = newList.get(i);
-                String elementPath = path + "[" + i + "]";
-                changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, added,
-                        null, renderText(added)));
+            enterGraphNode(path, oldValue, newValue, depth);
+            try {
+                List<Object> oldList = toList(oldValue);
+                List<Object> newList = toList(newValue);
+                int commonSize = Math.min(oldList.size(), newList.size());
+                for (int i = 0; i < commonSize; i++) {
+                    compare(path + "[" + i + "]", path + "[" + i + "]", oldList.get(i), newList.get(i), depth + 1, changes);
+                }
+                for (int i = commonSize; i < oldList.size(); i++) {
+                    Object removed = oldList.get(i);
+                    String elementPath = path + "[" + i + "]";
+                    changes.add(new FieldChange(elementPath, elementPath, ChangeKind.REMOVED, removed, null,
+                            renderText(removed), null));
+                }
+                for (int i = commonSize; i < newList.size(); i++) {
+                    Object added = newList.get(i);
+                    String elementPath = path + "[" + i + "]";
+                    changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, added,
+                            null, renderText(added)));
+                }
+            } finally {
+                exitGraphNode(oldValue, newValue);
             }
         }
 
