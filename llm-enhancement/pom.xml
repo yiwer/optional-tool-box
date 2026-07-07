@@ -48,6 +48,15 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>
         </dependency>
+        <!-- OpenAiCompatibleClient 直接读取 org.slf4j.MDC 取当前 traceId 传给 UsageListener
+             （03 §4.4："traceId 取自 facility TraceIdFilter 的 MDC"）；facility 自身的
+             TraceIdFilter 同样直接使用裸 MDC API（无门面封装该读取），故本模块需与其对齐、
+             显式声明该直接使用的依赖（compile scope，同 mail 对 logback/slf4j 的显式声明先例，
+             此处因是主代码直接使用而非测试代码，作用域升级为 compile）。 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -83,11 +92,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
@@ -99,10 +103,13 @@
             <artifactId>archunit</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- WireMock 契约测试（无 Docker）：模拟 OpenAI 兼容 /chat/completions 端点。 -->
+        <!-- WireMock 契约测试（无 Docker）：模拟 OpenAI 兼容 /chat/completions 端点。用
+             wiremock-jetty12 而非裸 wiremock——父 pom 该坐标的版本管理注释详述了原因
+             （裸 wiremock 传递的部分 Jetty 坐标仍是 11，与 Boot 3.5 BOM 管理的 Jetty 12 冲突，
+             导致 WireMockServer 启动期报 "Jetty 11 is not present"）。 -->
         <dependency>
             <groupId>org.wiremock</groupId>
-            <artifactId>wiremock</artifactId>
+            <artifactId>wiremock-jetty12</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -125,6 +132,23 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 实测踩坑（部分 Windows 环境）：JDK 21 起 NIO Selector（WEPollSelectorImpl，
+                         Jetty/WireMock 等内嵌服务器一律经此打开 Selector）内部用 AF_UNIX 域套接字
+                         建立自唤醒管道，匿名绑定目录解析顺序为 jdk.net.unixdomain.tmpdir 系统属性 →
+                         %TEMP% 环境变量 → java.io.tmpdir（sun.nio.ch.UnixDomainSocketsUtil#getTempDir
+                         doc注释）。当用户名较长导致 %TEMP% 展开为 8.3 短文件名形式（含 "~"，如
+                         C:\Users\ADMINI~1\...）时，该路径下的 AF_UNIX connect() 会报
+                         "Invalid argument" 而 Selector.open() 失败（已用最小复现单独验证：换成不含
+                         "~" 的短路径即恢复正常）——本模块 WireMock 契约测试因此在此类机器上无法启动
+                         内嵌服务器。显式设置 jdk.net.unixdomain.tmpdir 指向项目自身 target/ 目录
+                         （路径浅、不含特殊字符、跨平台可写）规避之；对未受此问题影响的机器无副作用。 -->
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Djdk.net.unixdomain.tmpdir=${project.build.directory}/tmp</argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

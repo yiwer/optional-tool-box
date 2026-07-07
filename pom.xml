@@ -126,6 +126,18 @@
                 <artifactId>wiremock</artifactId>
                 <version>${wiremock.version}</version>
             </dependency>
+            <dependency>
+                <!-- 实测踩坑：裸 org.wiremock:wiremock 的 Maven POM 声明的部分 Jetty 传递依赖坐标
+                     仍是 Jetty 11 命名（jetty-servlet/jetty-servlets/jetty-webapp），而 Spring Boot
+                     3.5 BOM（spring-boot-dependencies）管理的是 Jetty 12；两者混入同一 test 类路径
+                     后 WireMockServer 启动期报 "Jetty 11 is not present"（服务端 HttpServerFactory
+                     探测失败）。官方针对 Jetty 12 环境的方案是改用 wiremock-jetty12 构件——其自身
+                     POM 已将 org.wiremock:wiremock 的全部 org.eclipse.jetty 传递依赖排除并重声明为
+                     Jetty 12 + jetty-ee10-* 坐标。故版本管理同时覆盖该构件，模块 test 依赖据此切换。 -->
+                <groupId>org.wiremock</groupId>
+                <artifactId>wiremock-jetty12</artifactId>
+                <version>${wiremock.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

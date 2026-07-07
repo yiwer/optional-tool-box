@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      facility Jsons.deserialize 对不合法 JSON 走 LogUtil.warn（含异常栈），本模块多个测试
+      （OpenAiErrorMapper 的"无法解析错误体"分支、chatStructured 的非法 JSON 分支）刻意构造
+      非法 JSON 以覆盖鲁棒解析路径，属预期行为而非缺陷，测试作用域内收敛到 ERROR 避免噪音
+      污染 mvn verify 输出（同 compare 模块对 facility.json 的降噪先例）。
+    -->
+    <logger name="cn.code91.facility.json" level="ERROR"/>
+
+    <!--
+      本模块限流命中 WARN、用量回调异常 WARN、重试退避 WARN 是测试矩阵刻意触发的预期行为
+      （裁定 C/F、UsageListener 回调语义），属预期输出而非缺陷，测试作用域内调至 OFF
+      避免告警噪音污染 mvn verify 输出；生产作用域不受影响（同 mail 模块先例）。
+    -->
+    <logger name="cn.code91.toolbox.llm" level="OFF"/>
+
+    <!--
+      装配矩阵的负路径（缺 api-key/base-url fail-fast）刻意让 ApplicationContextRunner 的
+      上下文刷新失败以断言启动期拦截；AnnotationConfigApplicationContext 对此固定打
+      "cancelling refresh attempt" WARN，属预期行为，测试作用域内收敛（同 mail 模块先例）。
+    -->
+    <logger name="org.springframework.context.annotation.AnnotationConfigApplicationContext" level="ERROR"/>
+
+    <!-- WireMock 自身及其内嵌 Jetty 服务器的启停日志较冗长（每个测试方法起停一个 WireMockServer），
+         测试作用域内收敛到 WARN。WireMock 内部使用了已弃用的 Jetty CrossOriginFilter，Jetty 对此
+         固定打 WARN（第三方库内部实现细节，非本模块缺陷），进一步收敛到 ERROR。 -->
+    <logger name="com.github.tomakehurst.wiremock" level="WARN"/>
+    <logger name="org.wiremock" level="WARN"/>
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="org.eclipse.jetty.util.DeprecationWarning" level="ERROR"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
