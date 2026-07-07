@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      PgJsonbHandlerTest 故意传入非法 JSON 逼出反序列化失败以验证 SQLException 转译；
+      facility Jsons.deserialize 对该场景固定打印 WARN + 堆栈，属预期行为而非缺陷，
+      测试作用域内调至 OFF 避免堆栈噪音污染 mvn verify 输出（同 compare 模块对
+      facility.json 的降噪先例）。
+    -->
+    <logger name="cn.code91.facility.json" level="OFF"/>
+
+    <!--
+      装配矩阵负路径（如 NamedParameterJdbcTemplate 缺类场景）可能触发 Spring 容器刷新失败，
+      AnnotationConfigApplicationContext 对此固定打 "cancelling refresh attempt" WARN，
+      属预期行为，测试作用域内收敛（同 mail 模块先例）。
+    -->
+    <logger name="org.springframework.context.annotation.AnnotationConfigApplicationContext" level="ERROR"/>
+
+    <!--
+      Testcontainers PostgreSQL IT 的容器启停日志与 JDBC 连接日志默认 INFO 级别噪音较大，
+      收敛到 WARN（同 storage 模块对 Testcontainers 的降噪做法）。
+    -->
+    <logger name="org.testcontainers" level="WARN"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="tc" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
