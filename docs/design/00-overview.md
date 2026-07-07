@@ -219,7 +219,7 @@ XxxRegistry xxxRegistry(ObjectProvider<XxxHandler> handlers,
 | `org.springframework.ai:spring-ai-bom` | 1.1.4 | llm P3 适配（import 方式） | beacon 根 pom 实测值 |
 | `com.icegreen:greenmail-junit5` | 2.1.x | mail 集成测试（test） | 业界标准 |
 | `org.wiremock:wiremock` | 3.x | llm 集成测试（test） | 业界标准 |
-| `org.testcontainers:testcontainers-bom` | 1.20.4 | database/storage 集成测试（import，test） | beacon 根 pom 实测值 |
+| `org.testcontainers:*` | 由 Spring Boot BOM 接管 | database/storage 集成测试（test） | 终审修正（2026-07-06）：Boot BOM 自身已 import testcontainers-bom，父 pom 再单独 import 会被先声明的 Boot BOM 架空（死配置），不要重复声明 |
 | jakarta-mail / thymeleaf / jackson / lombok | 由 Boot BOM 管理 | mail/公共 | — |
 
 ### 5.4 公共构建插件（pluginManagement）
@@ -240,7 +240,7 @@ XxxRegistry xxxRegistry(ObjectProvider<XxxHandler> handlers,
 | database | `LogUtil`、`CryptoUtil`（字段加密 P3）、`IdUtil`（雪花主键策略）、facility web `PageQuery/PageBaseResponse`（分页对接） | 数据访问路径不用 Result（保事务异常语义） |
 | llm | `HttpClients`/`RestClient`（同步调用）、`MaskUtil`（提示词/日志脱敏）、`RateLimiterUtil`（客户端限流）、`Async`（异步）、`JsonUtil`（结构化输出解析） | 流式 SSE 用 JDK `java.net.http.HttpClient`，见 03 文档 §4.4 |
 | mail | `Result`、`LogUtil`、`Filenames`+`MimeTyping`（附件安全校验）、`RateLimiterUtil`（发送限速）、`LocaleUtil`（多语言邮件） | 底层引擎 = spring-boot-starter-mail 的 `JavaMailSenderImpl` |
-| storage | `Result`、`Filenames`（路径穿越/危险扩展名）、`MimeTyping`（MIME 嗅探核验）、`PathIo`（local adapter）、`LogUtil` | 架构直接移植 beacon-storage，另加上传守卫与 local adapter |
+| storage | `Result`、`Filenames`（路径穿越/危险扩展名）、`MimeTyping`（MIME 嗅探核验）、`PathIo`（仅 local adapter 目录维护——其 API 只有 deleteDirectory/directorySize，文件读写走 JDK Files；终审修正）、`LogUtil` | 架构直接移植 beacon-storage，另加上传守卫与 local adapter |
 
 **禁止清单**（任何模块不得自建）：HTTP 客户端、JSON 序列化、日志门面、缓存、分布式锁、限流器、脱敏、统一响应模型。
 

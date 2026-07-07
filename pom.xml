@@ -66,10 +66,10 @@
                 <version>${aliyun-sdk-oss.version}</version>
             </dependency>
             <dependency>
-                <!-- aliyun-sdk-oss 传递依赖 aliyun-java-sdk-core（其自身声明为 optional，不透传）；
+                <!-- aliyun-sdk-oss 以普通 compile 依赖传递引入 aliyun-java-sdk-core（会正常透传）；
                      AliyunOssClientFactory 直接捕获其 ClientException（CredentialsProviderFactory
-                     工厂方法签名声明该受检异常），需显式声明，版本对齐 aliyun-sdk-oss 3.18.1 实测
-                     传递版本，避免消费方引入时版本漂移。 -->
+                     工厂方法签名声明该受检异常），依赖账目守卫要求"直接使用必须显式声明"；
+                     版本对齐 aliyun-sdk-oss 3.18.1 自身声明的传递版本，避免消费方引入时漂移。 -->
                 <groupId>com.aliyun</groupId>
                 <artifactId>aliyun-java-sdk-core</artifactId>
                 <version>4.5.10</version>

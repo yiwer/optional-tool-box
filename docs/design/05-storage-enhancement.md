@@ -47,7 +47,7 @@
 | `Result<T,E>` | 全部 API 返回值；SDK 异常在 ErrorMapper 内收敛，**绝不外抛** |
 | `Filenames` | 上传守卫：路径穿越防御、危险扩展名、文件名清洗 |
 | `MimeTyping` | 上传守卫：魔数嗅探与声明 Content-Type 一致性 |
-| `PathIo` | local adapter 的底层读写 |
+| `PathIo` | local adapter 的目录维护（deleteDirectory/directorySize）；对象文件读写走 JDK Files——PathIo 无文件级读写 API（终审修正） |
 | `LogUtil` | 操作日志 |
 | facility web `HttpFileResponses`（消费方侧） | 下载响应组装——本模块产出流，Web 层用 facility 工具回给浏览器 |
 
@@ -163,7 +163,7 @@ toolbox:
     guard:
       max-size: 100MB
       blocked-extensions: [exe, bat]    # 叠加 facility 危险名单
-      verify-mime: true                 # 魔数嗅探比对
+      verify-mime: true                 # 魔数嗅探比对。裁定：默认值为 false——tika-core 是可选依赖且守卫 fail-closed，未引 tika 时开启会拒绝全部上传；此处为显式开启示例
     aliyun-oss:
       endpoint: https://oss-cn-hangzhou.aliyuncs.com
       # 凭证二选一：ecs-ram-role 优先；否则 AK/SK（env 占位符，风险 R6）

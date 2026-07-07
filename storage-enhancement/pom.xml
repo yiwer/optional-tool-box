@@ -74,8 +74,9 @@
             <optional>true</optional>
         </dependency>
         <!-- AliyunOssClientFactory 直接捕获 ClientException（CredentialsProviderFactory 工厂方法
-             签名声明的受检异常），此前仅靠 aliyun-sdk-oss 传递引入（其自身声明为 optional，不透传）；
-             与 aliyun-sdk-oss 同为 aliyun-oss adapter 的同一功能簇，同样 optional=true。 -->
+             签名声明的受检异常）；该依赖本可经 aliyun-sdk-oss 普通 compile 传递获得，但依赖账目
+             守卫要求"直接使用必须显式声明"；与 aliyun-sdk-oss 同为 aliyun-oss adapter 功能簇，
+             同样 optional=true。 -->
         <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>aliyun-java-sdk-core</artifactId>
