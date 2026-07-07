@@ -109,6 +109,14 @@
                 <artifactId>greenmail-junit5</artifactId>
                 <version>${greenmail.version}</version>
             </dependency>
+            <dependency>
+                <!-- greenmail-junit5 传递依赖 greenmail 核心库；mail-enhancement 测试直接使用核心 API
+                     （ServerSetupTest/GreenMailUtil/GreenMailConfiguration），依赖账目守卫要求显式声明，
+                     此前未被 dependencyManagement 收口，版本对齐同一 greenmail.version（同 archunit 先例）。 -->
+                <groupId>com.icegreen</groupId>
+                <artifactId>greenmail</artifactId>
+                <version>${greenmail.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
