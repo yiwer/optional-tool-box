@@ -19,6 +19,13 @@
     -->
     <logger name="cn.code91.toolbox.mail" level="OFF"/>
 
+    <!--
+      装配矩阵的两条负路径（沙箱 fail-fast、账号缺 host）刻意让 ApplicationContextRunner
+      的上下文刷新失败以断言启动期拦截；AnnotationConfigApplicationContext 对此固定打
+      "cancelling refresh attempt" WARN，属预期行为，测试作用域内收敛。
+    -->
+    <logger name="org.springframework.context.annotation.AnnotationConfigApplicationContext" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>

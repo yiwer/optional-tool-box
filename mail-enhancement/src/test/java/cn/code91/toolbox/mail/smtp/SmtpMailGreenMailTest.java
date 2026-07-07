@@ -10,6 +10,7 @@ import cn.code91.toolbox.mail.guard.DefaultAttachmentGuard;
 import cn.code91.toolbox.mail.sandbox.SandboxPolicy;
 import cn.code91.toolbox.mail.spi.MailSendListener;
 import cn.code91.toolbox.mail.template.SimpleTemplateRenderer;
+import cn.code91.toolbox.mail.testfixtures.RecordingListener;
 import com.icegreen.greenmail.configuration.GreenMailConfiguration;
 import com.icegreen.greenmail.junit5.GreenMailExtension;
 import com.icegreen.greenmail.util.ServerSetupTest;
@@ -283,25 +284,6 @@ class SmtpMailGreenMailTest {
     private static int findFreePort() throws Exception {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
-        }
-    }
-
-    /**
-     * 记录式监听器（GreenMail 侧复用）。
-     */
-    static final class RecordingListener implements MailSendListener {
-
-        final List<MailReceipt> successes = new ArrayList<>();
-        final List<MailError> failures = new ArrayList<>();
-
-        @Override
-        public void onSuccess(MailMessage message, MailReceipt receipt) {
-            successes.add(receipt);
-        }
-
-        @Override
-        public void onFailure(MailMessage message, MailError error) {
-            failures.add(error);
         }
     }
 }

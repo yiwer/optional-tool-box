@@ -10,26 +10,23 @@ import cn.code91.toolbox.mail.guard.DefaultAttachmentGuard;
 import cn.code91.toolbox.mail.sandbox.SandboxPolicy;
 import cn.code91.toolbox.mail.spi.MailSendListener;
 import cn.code91.toolbox.mail.template.SimpleTemplateRenderer;
+import cn.code91.toolbox.mail.testfixtures.CapturingMailSender;
+import cn.code91.toolbox.mail.testfixtures.RecordingListener;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
-import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
-import java.io.InputStream;
 import java.net.ConnectException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -341,81 +338,5 @@ class SmtpMailDispatcherTest {
         return new MailSendException("Mail server connection failed",
                 new MessagingException("Couldn't connect to host",
                         new ConnectException("Connection refused: connect")));
-    }
-
-    /**
-     * 内存捕获式 {@link JavaMailSender} 桩：send 时 {@code saveChanges()}（生成 Message-ID，
-     * 与真实 {@code JavaMailSenderImpl} 行为一致）后入列；可注入固定异常模拟发送失败。
-     */
-    static final class CapturingMailSender implements JavaMailSender {
-
-        private final Session session = Session.getInstance(new Properties());
-        final List<MimeMessage> sent = new ArrayList<>();
-        final AtomicInteger sendAttempts = new AtomicInteger();
-        RuntimeException failWith;
-
-        @Override
-        public MimeMessage createMimeMessage() {
-            return new MimeMessage(session);
-        }
-
-        @Override
-        public MimeMessage createMimeMessage(InputStream contentStream) {
-            try {
-                return new MimeMessage(session, contentStream);
-            } catch (MessagingException e) {
-                throw new IllegalStateException(e);
-            }
-        }
-
-        @Override
-        public void send(MimeMessage mimeMessage) {
-            sendAttempts.incrementAndGet();
-            if (failWith != null) {
-                throw failWith;
-            }
-            try {
-                mimeMessage.saveChanges();
-            } catch (MessagingException e) {
-                throw new IllegalStateException(e);
-            }
-            sent.add(mimeMessage);
-        }
-
-        @Override
-        public void send(MimeMessage... mimeMessages) {
-            for (MimeMessage mimeMessage : mimeMessages) {
-                send(mimeMessage);
-            }
-        }
-
-        @Override
-        public void send(SimpleMailMessage simpleMessage) {
-            throw new UnsupportedOperationException("桩不支持 SimpleMailMessage");
-        }
-
-        @Override
-        public void send(SimpleMailMessage... simpleMessages) {
-            throw new UnsupportedOperationException("桩不支持 SimpleMailMessage");
-        }
-    }
-
-    /**
-     * 记录式监听器。
-     */
-    static final class RecordingListener implements MailSendListener {
-
-        final List<MailReceipt> successes = new ArrayList<>();
-        final List<MailError> failures = new ArrayList<>();
-
-        @Override
-        public void onSuccess(MailMessage message, MailReceipt receipt) {
-            successes.add(receipt);
-        }
-
-        @Override
-        public void onFailure(MailMessage message, MailError error) {
-            failures.add(error);
-        }
     }
 }
