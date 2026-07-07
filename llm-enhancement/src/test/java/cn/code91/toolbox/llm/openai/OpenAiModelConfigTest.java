@@ -63,4 +63,16 @@ class OpenAiModelConfigTest {
         assertThat(config.maxRetries()).isEqualTo(2);
     }
 
+    @Test
+    void toStringNeverExposesApiKey() {
+        OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "https://api.deepseek.com/v1",
+                "sk-super-secret-value", "deepseek-chat", 0.2, 512, Duration.ofSeconds(30), 2,
+                Duration.ofMillis(500), 5);
+
+        String rendered = config.toString();
+
+        assertThat(rendered).doesNotContain("sk-super-secret-value");
+        assertThat(rendered).contains("******");
+        assertThat(rendered).as("其余字段仍应正常输出，只有 apiKey 被遮蔽").contains("deepseek-chat", "deepseek");
+    }
 }

@@ -99,14 +99,16 @@ class OpenAiCompatibleClientMaskingTest {
     }
 
     @Test
-    void apiKeyNeverAppearsInLogOutputEvenOnFailure() {
+    void apiKeyNeverAppearsInLogOutputOrErrorValueEvenOnFailure() {
         wireMock.stubFor(post(urlEqualTo("/v1/chat/completions")).willReturn(aResponse()
                 .withStatus(500).withHeader("Content-Type", "application/json")
                 .withBody("{\"error\":{\"message\":\"boom\",\"type\":\"server_error\"}}")));
 
-        clientOf().chat(ChatRequest.user("普通请求"));
+        Result<ChatResponse, LlmError> result = clientOf().chat(ChatRequest.user("普通请求"));
 
         assertThat(joinedLogMessages()).doesNotContain("sk-super-secret-api-key-12345");
+        assertThat(result.toString()).doesNotContain("sk-super-secret-api-key-12345");
+        assertThat(result.getErr().message()).doesNotContain("sk-super-secret-api-key-12345");
     }
 
     @Test

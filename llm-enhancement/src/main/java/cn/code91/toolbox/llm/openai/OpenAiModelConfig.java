@@ -53,4 +53,18 @@ public record OpenAiModelConfig(
             maxRetries = 2;
         }
     }
+
+    /**
+     * 覆盖 record 默认 {@code toString()}（会逐字段输出，含 {@code apiKey} 明文）：
+     * {@code apiKey} 固定替换为 {@code ******}，其余字段照常输出（全局约束 12：
+     * "api-key 绝不出现在 toString/日志/错误消息"，本类当前虽无调用点整体打印自身，
+     * 但作为防御性设计，避免未来新增日志语句时意外泄露）。
+     */
+    @Override
+    public String toString() {
+        return "OpenAiModelConfig[modelName=" + modelName + ", baseUrl=" + baseUrl
+                + ", apiKey=******, model=" + model + ", temperature=" + temperature
+                + ", maxTokens=" + maxTokens + ", timeout=" + timeout + ", maxRetries=" + maxRetries
+                + ", retryBackoff=" + retryBackoff + ", rateLimitQps=" + rateLimitQps + "]";
+    }
 }
