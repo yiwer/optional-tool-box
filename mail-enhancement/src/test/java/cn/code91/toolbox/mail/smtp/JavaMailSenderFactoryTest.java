@@ -90,6 +90,18 @@ class JavaMailSenderFactoryTest {
     }
 
     @Test
+    void connectionConfigToStringMasksPassword() {
+        // 敏感字段不落日志：record 默认 toString 会明文输出组件，密码必须脱敏。
+        SmtpConnectionConfig config = new SmtpConnectionConfig(
+                "notice", "smtp.exmail.qq.com", 465, true,
+                "notice@code91.cn", "super-secret-password", null, null);
+
+        assertThat(config.toString())
+                .doesNotContain("super-secret-password")
+                .contains("notice@code91.cn");
+    }
+
+    @Test
     void customProtocolDrivesPropertyPrefix() {
         SmtpConnectionConfig config = new SmtpConnectionConfig(
                 "secure", "localhost", 465, true, "u", "p", "smtps", null);

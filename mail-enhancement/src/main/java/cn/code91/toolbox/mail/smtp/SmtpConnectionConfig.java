@@ -22,4 +22,16 @@ public record SmtpConnectionConfig(String name, String host, int port, boolean s
             protocol = "smtp";
         }
     }
+
+    /**
+     * 覆写以脱敏 password：record 默认 toString 会明文输出全部组件，而配置对象可能被
+     * 带入调试日志或异常上下文——密码绝不入日志（brief 质量约束：敏感字段不落日志）。
+     */
+    @Override
+    public String toString() {
+        return "SmtpConnectionConfig[name=" + name + ", host=" + host + ", port=" + port
+                + ", ssl=" + ssl + ", username=" + username
+                + ", password=" + (password == null ? "null" : "******")
+                + ", protocol=" + protocol + ", timeout=" + timeout + "]";
+    }
 }

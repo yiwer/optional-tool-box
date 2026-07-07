@@ -1,5 +1,9 @@
 package cn.code91.toolbox.mail.autoconfigure;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import cn.code91.facility.result.Result;
 import cn.code91.toolbox.mail.core.Attachment;
 import cn.code91.toolbox.mail.core.MailAccountRegistry;
@@ -12,6 +16,7 @@ import cn.code91.toolbox.mail.spi.MailTemplateRenderer;
 import cn.code91.toolbox.mail.testfixtures.CapturingMailSender;
 import cn.code91.toolbox.mail.testfixtures.RecordingListener;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -239,6 +244,59 @@ class ToolboxMailAutoConfigurationTest {
                         "toolbox.mail.sandbox.enabled=true",
                         "toolbox.mail.sandbox.redirect-to=qa-inbox@code91.cn")
                 .run(context -> assertThat(context).hasSingleBean(MailAccountRegistry.class));
+    }
+
+    @Test
+    void sandboxEnabledEmitsProminentAssemblyWarn() {
+        // 裁定 B：沙箱启用时装配期必须打一条显眼 WARN。LogUtil 以调用方类名为 logger
+        // （ADR-0022），logback-test.xml 把本模块调至 OFF 降噪，此处临时抬回 WARN 并挂
+        // 内存 appender 捕获事件，测毕复原。
+        Logger logger = (Logger) LoggerFactory.getLogger(ToolboxMailAutoConfiguration.class);
+        Level original = logger.getLevel();
+        boolean originalAdditive = logger.isAdditive();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.WARN);
+        // 只进内存 appender、不向上冒泡到控制台，保持 verify 输出无告警噪音。
+        logger.setAdditive(false);
+        logger.addAppender(appender);
+        try {
+            contextRunner
+                    .withPropertyValues(
+                            "toolbox.mail.sandbox.enabled=true",
+                            "toolbox.mail.sandbox.redirect-to=qa-inbox@code91.cn")
+                    .run(context -> assertThat(context).hasSingleBean(MailAccountRegistry.class));
+
+            assertThat(appender.list)
+                    .as("沙箱启用必须在装配期打出显眼 WARN")
+                    .anySatisfy(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage()).contains("沙箱");
+                    });
+        } finally {
+            logger.detachAppender(appender);
+            logger.setAdditive(originalAdditive);
+            logger.setLevel(original);
+        }
+    }
+
+    @Test
+    void verifyMimeWithTikaAbsentFailsClosedThroughAssembledGuard() {
+        // 裁定 E 的装配级验证：guard bean 的探测 ClassLoader 取自容器（ResourceLoader），
+        // FilteredClassLoader 屏蔽 tika 时装配出的守卫确实 fail-closed 带依赖引导。
+        contextRunner
+                .withClassLoader(new FilteredClassLoader("org.apache.tika"))
+                .withPropertyValues("toolbox.mail.attachment.verify-mime=true")
+                .run(context -> {
+                    AttachmentGuard guard = context.getBean(AttachmentGuard.class);
+
+                    Result<Void, MailError> result =
+                            guard.check(Attachment.of("photo.jpg", "image/jpeg", new byte[]{1}));
+
+                    assertThat(result.isErr()).isTrue();
+                    assertThat(result.getErr()).isInstanceOf(MailError.AttachmentRejected.class);
+                    assertThat(result.getErr().message()).contains("tika-core");
+                });
     }
 
     @Test

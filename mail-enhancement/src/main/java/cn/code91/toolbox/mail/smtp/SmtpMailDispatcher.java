@@ -92,7 +92,14 @@ public final class SmtpMailDispatcher implements MailDispatcher {
 
     @Override
     public Result<MailReceipt, MailError> send(MailMessage message) {
-        Result<MailReceipt, MailError> result = doSend(message);
+        Result<MailReceipt, MailError> result;
+        try {
+            result = doSend(message);
+        } catch (Exception e) {
+            // 约束 3：公开 API 零异常外抛——用户自定义 SPI（renderer/guard）等抛出的未预期
+            // 异常同样收敛为错误值（mapper 兜底为 ProviderError），失败回调照常触发。
+            result = Result.err(errorMapper.map(e));
+        }
         notifyListeners(message, result);
         return result;
     }

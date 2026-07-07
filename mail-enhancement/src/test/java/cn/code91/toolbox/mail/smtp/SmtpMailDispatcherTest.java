@@ -307,6 +307,27 @@ class SmtpMailDispatcherTest {
     }
 
     @Test
+    void throwingUserSpiGuardIsConvergedToProviderErrorInsteadOfLeaking() {
+        // 约束 3：公开 API 零异常外抛——用户自定义 SPI（guard/renderer）抛出的未预期异常
+        // 同样必须收敛为错误值，且失败回调正常触发。
+        CapturingMailSender sender = new CapturingMailSender();
+        RecordingListener listener = new RecordingListener();
+        SmtpMailDispatcher dispatcher = new SmtpMailDispatcher(
+                sender, SETTINGS, SandboxPolicy.disabled(), new SimpleTemplateRenderer(),
+                attachment -> {
+                    throw new IllegalStateException("user guard boom");
+                }, List.of(listener), (a, p) -> null, noSleep());
+
+        Result<MailReceipt, MailError> result = dispatcher.send(MailMessage.builder()
+                .to("a@x.com").text("t").attach(Attachment.of("a.txt", new byte[]{1})).build());
+
+        assertThat(result.isErr()).isTrue();
+        assertThat(result.getErr()).isInstanceOf(MailError.ProviderError.class);
+        assertThat(listener.failures).hasSize(1);
+        assertThat(sender.sent).isEmpty();
+    }
+
+    @Test
     void sendAsyncCompletesWithSameSemantics() {
         CapturingMailSender sender = new CapturingMailSender();
         SmtpMailDispatcher dispatcher = dispatcher(sender, SETTINGS, SandboxPolicy.disabled(), List.of());
