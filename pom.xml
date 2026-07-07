@@ -73,6 +73,15 @@
                 <version>${aliyun-sdk-oss.version}</version>
             </dependency>
             <dependency>
+                <!-- aliyun-sdk-oss 传递依赖 aliyun-java-sdk-core（其自身声明为 optional，不透传）；
+                     AliyunOssClientFactory 直接捕获其 ClientException（CredentialsProviderFactory
+                     工厂方法签名声明该受检异常），需显式声明，版本对齐 aliyun-sdk-oss 3.18.1 实测
+                     传递版本，避免消费方引入时版本漂移。 -->
+                <groupId>com.aliyun</groupId>
+                <artifactId>aliyun-java-sdk-core</artifactId>
+                <version>4.5.10</version>
+            </dependency>
+            <dependency>
                 <!-- server-facility 的 MimeTyping 内部硬依赖 Tika（其自身 pom 声明 optional，不透传）；
                      storage-enhancement 的上传守卫直接调用 MimeTyping，同样以 optional 声明，
                      版本收口于此，对齐 server-facility 实测所用版本，避免消费方引入时版本漂移。 -->

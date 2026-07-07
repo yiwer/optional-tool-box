@@ -57,6 +57,13 @@ public class ToolboxStorageAutoConfiguration {
     /**
      * L3 互斥①：{@code type=aws-s3}。另加 L1（{@code @ConditionalOnClass}，字符串形式探测
      * {@code S3Client}，消费方未引入 SDK 时本配置整体不装配，门面仍可加载）。
+     *
+     * <p><b>I3 修复</b>：{@code client}/{@code presigner} 此前是 registry {@code @Bean}
+     * 方法体内的局部对象，Spring 推断不到销毁方法，上下文关闭时连接池/线程泄漏。现各自独立成
+     * {@code @Bean}（{@code @ConditionalOnMissingBean}，可被应用覆盖——附带收益：client/presigner
+     * 成为可覆盖的 Seam），registry 方法转为注入这两个 bean，不再自行构造。AWS SDK v2 客户端
+     * 实现 {@code SdkAutoCloseable}/{@code AutoCloseable}（{@code close()}），Spring 默认的
+     * inferred 销毁模式即可探测到，无需显式 {@code destroyMethod}。
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "toolbox.storage", name = "type", havingValue = "aws-s3")
@@ -65,40 +72,64 @@ public class ToolboxStorageAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        ObjectStoreRegistry toolboxStorageAwsS3Registry(ToolboxStorageProperties properties) {
-            ToolboxStorageProperties.AwsS3 awsS3 = properties.awsS3();
-            AwsS3Config config = new AwsS3Config(
-                    awsS3.endpoint(), awsS3.region(), awsS3.pathStyleAccess(),
-                    awsS3.accessKeyId(), awsS3.accessKeySecret());
-            // factory 构造期即完成凭证校验（fail-fast，凭证裁定 B）；client/presigner 在此立即构造，
-            // 而非延迟到首次 get()，保证配置错误在启动期暴露。
-            S3Client client = AwsS3ClientFactory.createS3Client(config);
-            S3Presigner presigner = AwsS3ClientFactory.createS3Presigner(config);
+        S3Client toolboxStorageAwsS3Client(ToolboxStorageProperties properties) {
+            // factory 构造期即完成凭证校验（fail-fast，凭证裁定 B）；在此立即构造而非延迟到
+            // 首次 get()，保证配置错误在启动期暴露。
+            return AwsS3ClientFactory.createS3Client(toAwsS3Config(properties));
+        }
 
+        @Bean
+        @ConditionalOnMissingBean
+        S3Presigner toolboxStorageAwsS3Presigner(ToolboxStorageProperties properties) {
+            return AwsS3ClientFactory.createS3Presigner(toAwsS3Config(properties));
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        ObjectStoreRegistry toolboxStorageAwsS3Registry(
+                ToolboxStorageProperties properties, S3Client client, S3Presigner presigner) {
+            ToolboxStorageProperties.AwsS3 awsS3 = properties.awsS3();
             Map<String, ObjectStore> stores = new LinkedHashMap<>();
             awsS3.buckets().forEach((logicalName, bucketProps) ->
                     stores.put(logicalName, new AwsS3ObjectStore(logicalName, bucketProps.name(), client, presigner)));
             return new DefaultObjectStoreRegistry(stores, "aws-s3");
         }
+
+        private static AwsS3Config toAwsS3Config(ToolboxStorageProperties properties) {
+            ToolboxStorageProperties.AwsS3 awsS3 = properties.awsS3();
+            return new AwsS3Config(
+                    awsS3.endpoint(), awsS3.region(), awsS3.pathStyleAccess(),
+                    awsS3.accessKeyId(), awsS3.accessKeySecret());
+        }
     }
 
     /**
      * L3 互斥②：{@code type=aliyun-oss}。另加 L1（探测 {@code com.aliyun.oss.OSS}）。
+     *
+     * <p><b>I3 修复</b>：{@code client} 同样独立成 {@code @Bean}。{@link OSS} 不实现
+     * {@code AutoCloseable}，其关闭方法是 {@code shutdown()}——虽然 Spring inferred 模式
+     * 也会探测名为 {@code shutdown} 的方法，仍显式声明 {@code destroyMethod="shutdown"}
+     * 以确保确定性、不依赖推断细节。
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "toolbox.storage", name = "type", havingValue = "aliyun-oss")
     @ConditionalOnClass(name = "com.aliyun.oss.OSS")
     static class AliyunOssConfiguration {
 
-        @Bean
+        @Bean(destroyMethod = "shutdown")
         @ConditionalOnMissingBean
-        ObjectStoreRegistry toolboxStorageAliyunOssRegistry(ToolboxStorageProperties properties) {
+        OSS toolboxStorageAliyunOssClient(ToolboxStorageProperties properties) {
             ToolboxStorageProperties.AliyunOss aliyunOss = properties.aliyunOss();
             AliyunOssConfig config = new AliyunOssConfig(
                     aliyunOss.endpoint(), aliyunOss.ecsRamRole(), aliyunOss.accessKeyId(), aliyunOss.accessKeySecret());
             // factory 构造期即完成凭证校验（fail-fast，凭证裁定 B）。
-            OSS client = AliyunOssClientFactory.createClient(config);
+            return AliyunOssClientFactory.createClient(config);
+        }
 
+        @Bean
+        @ConditionalOnMissingBean
+        ObjectStoreRegistry toolboxStorageAliyunOssRegistry(ToolboxStorageProperties properties, OSS client) {
+            ToolboxStorageProperties.AliyunOss aliyunOss = properties.aliyunOss();
             Map<String, ObjectStore> stores = new LinkedHashMap<>();
             aliyunOss.buckets().forEach((logicalName, bucketProps) ->
                     stores.put(logicalName, new AliyunOssObjectStore(logicalName, bucketProps.name(), client)));

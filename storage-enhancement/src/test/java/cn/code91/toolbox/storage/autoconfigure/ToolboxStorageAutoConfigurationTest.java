@@ -6,13 +6,18 @@ import cn.code91.toolbox.storage.core.ObjectStore;
 import cn.code91.toolbox.storage.core.ObjectStoreRegistry;
 import cn.code91.toolbox.storage.guard.StorageGuard;
 import cn.code91.toolbox.storage.local.LocalFsObjectStore;
+import com.aliyun.oss.OSS;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.GenericApplicationContext;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.nio.file.Path;
 
@@ -90,6 +95,75 @@ class ToolboxStorageAutoConfigurationTest {
                     ObjectStore store = registry.get("images");
                     assertThat(store).isInstanceOf(AliyunOssObjectStore.class);
                 });
+    }
+
+    /**
+     * I3 回归：{@link S3Client}/{@link S3Presigner} 此前是 registry {@code @Bean}
+     * 方法体内的局部对象，Spring 推断不到销毁方法，上下文关闭时连接池/线程泄漏。修复后
+     * 二者应各自成为独立 bean（Seam：可被应用覆盖），且 context.close() 能正常触发其
+     * 销毁路径而不抛异常（AWS SDK v2 客户端实现 {@code SdkAutoCloseable}/
+     * {@code AutoCloseable}，Spring 默认推断模式即可探测到 {@code close()}）。
+     */
+    @Test
+    void awsS3ClientAndPresignerAreIndependentlyManagedBeansWithWorkingDestroyPath() {
+        contextRunner
+                .withPropertyValues(
+                        "toolbox.storage.type=aws-s3",
+                        "toolbox.storage.aws-s3.endpoint=http://localhost:9000",
+                        "toolbox.storage.aws-s3.region=us-east-1",
+                        "toolbox.storage.aws-s3.path-style-access=true",
+                        "toolbox.storage.aws-s3.access-key-id=test-ak",
+                        "toolbox.storage.aws-s3.access-key-secret=test-sk",
+                        "toolbox.storage.aws-s3.buckets.images.name=prod-images")
+                .run(this::assertAwsClientBeansPresentAndDestroyable);
+    }
+
+    private void assertAwsClientBeansPresentAndDestroyable(AssertableApplicationContext context) {
+        assertThat(context).hasSingleBean(S3Client.class);
+        assertThat(context).hasSingleBean(S3Presigner.class);
+
+        GenericApplicationContext generic = (GenericApplicationContext) context.getSourceApplicationContext();
+        assertThat(generic.getBeanDefinition(clientBeanNameOf(context, S3Client.class)).getDestroyMethodName())
+                .as("S3Client 销毁方法应被 Spring 推断接线（inferred 模式探测到 close()）")
+                .isIn("(inferred)", "close");
+        assertThat(generic.getBeanDefinition(clientBeanNameOf(context, S3Presigner.class)).getDestroyMethodName())
+                .as("S3Presigner 销毁方法应被 Spring 推断接线")
+                .isIn("(inferred)", "close");
+
+        // context.close() 应能正常触发销毁回调而不抛异常（验证销毁路径确实被接线且可执行）。
+        context.close();
+    }
+
+    /**
+     * I3 回归：{@link OSS} 此前同样是 registry {@code @Bean} 方法体内的局部对象。修复后应成为
+     * 独立 bean，销毁方法显式声明为 {@code shutdown}（OSS 不实现 {@code AutoCloseable}，
+     * 方法名 {@code shutdown} 虽在 Spring inferred 模式的探测名单内，仍显式声明以确保确定性）。
+     */
+    @Test
+    void aliyunOssClientIsIndependentlyManagedBeanWithWorkingDestroyPath() {
+        contextRunner
+                .withPropertyValues(
+                        "toolbox.storage.type=aliyun-oss",
+                        "toolbox.storage.aliyun-oss.endpoint=https://oss-cn-hangzhou.aliyuncs.com",
+                        "toolbox.storage.aliyun-oss.access-key-id=test-ak",
+                        "toolbox.storage.aliyun-oss.access-key-secret=test-sk",
+                        "toolbox.storage.aliyun-oss.buckets.images.name=prod-images")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(OSS.class);
+
+                    GenericApplicationContext generic = (GenericApplicationContext) context.getSourceApplicationContext();
+                    assertThat(generic.getBeanDefinition(clientBeanNameOf(context, OSS.class)).getDestroyMethodName())
+                            .as("OSS 销毁方法应显式声明为 shutdown")
+                            .isIn("(inferred)", "shutdown");
+
+                    context.close();
+                });
+    }
+
+    private static String clientBeanNameOf(AssertableApplicationContext context, Class<?> beanType) {
+        String[] names = context.getBeanNamesForType(beanType);
+        assertThat(names).as("应恰好存在一个 " + beanType.getSimpleName() + " bean").hasSize(1);
+        return names[0];
     }
 
     @Test

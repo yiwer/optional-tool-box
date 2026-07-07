@@ -73,6 +73,14 @@
             <artifactId>aliyun-sdk-oss</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- AliyunOssClientFactory 直接捕获 ClientException（CredentialsProviderFactory 工厂方法
+             签名声明的受检异常），此前仅靠 aliyun-sdk-oss 传递引入（其自身声明为 optional，不透传）；
+             与 aliyun-sdk-oss 同为 aliyun-oss adapter 的同一功能簇，同样 optional=true。 -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>aliyun-java-sdk-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- MimeTyping 底层 Tika：server-facility 自身声明为 optional，不会传递到本模块；
              守卫仅在 verify-mime=true 时才需要，同样 optional 声明，由消费方按需引入。 -->
         <dependency>
@@ -90,6 +98,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- ToolboxStorageAutoConfigurationTest（I3 回归）直接使用 GenericApplicationContext/
+             BeanDefinition（位于 spring-beans）断言销毁方法接线，此前仅靠 spring-context 传递引入。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

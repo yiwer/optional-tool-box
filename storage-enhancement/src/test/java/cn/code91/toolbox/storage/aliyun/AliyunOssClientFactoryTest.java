@@ -3,7 +3,7 @@ package cn.code91.toolbox.storage.aliyun;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.common.auth.CredentialsProvider;
 import com.aliyun.oss.common.auth.DefaultCredentialProvider;
-import com.aliyun.oss.common.auth.EcsRamRoleCredentialsProvider;
+import com.aliyun.oss.common.auth.InstanceProfileCredentialsProvider;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +22,11 @@ class AliyunOssClientFactoryTest {
 
         CredentialsProvider provider = AliyunOssClientFactory.resolveCredentialsProvider(config);
 
-        assertThat(provider).isInstanceOf(EcsRamRoleCredentialsProvider.class);
+        // ecs-ram-role 语义是"ECS 绑定的 RAM 角色名"，而非鉴权服务 URL；
+        // 必须走 InstanceProfileCredentialsProvider（内部拼 ECS metadata URL），
+        // 而非 EcsRamRoleCredentialsProvider（其构造参数是鉴权服务完整 URL，
+        // 直接把角色名传入会在 SDK 内部 new URL(...) 时抛 MalformedURLException）。
+        assertThat(provider).isInstanceOf(InstanceProfileCredentialsProvider.class);
     }
 
     @Test
