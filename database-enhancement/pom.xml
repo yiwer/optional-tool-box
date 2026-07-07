@@ -40,6 +40,15 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-beans</artifactId>
         </dependency>
+        <!-- PgJdbcRepository（L3）直接 catch/import org.springframework.dao.* 家族（如
+             EmptyResultDataAccessException），该包物理位于 spring-tx.jar；此前仅靠
+             spring-jdbc 传递引入，dependency:analyze 判定为直接使用未声明（同上一条注释的
+             spring-boot/spring-context/spring-beans 教训）。约束 3（数据访问路径保留 Spring
+             异常语义、不返 Result）正是靠这些类型实现，L3 必须能直接引用。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
 
         <!-- 可选依赖：p6spy（SQL 观测）、postgresql（PG-first 方言，PG 特化 handler 需其 PGobject/Array 类型）。
              消费方按需引入，版本仍由父 pom dependencyManagement 收口。 -->
