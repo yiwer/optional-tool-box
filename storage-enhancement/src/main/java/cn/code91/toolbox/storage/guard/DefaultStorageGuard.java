@@ -6,10 +6,8 @@ import cn.code91.facility.result.Result;
 import cn.code91.toolbox.storage.core.StorageError;
 import cn.code91.toolbox.storage.core.ValidationError;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.SequenceInputStream;
 
 /**
  * {@link StorageGuard} 默认实现。检查顺序（05 §4.3，固定不可调整，前一项失败即短路）：
@@ -28,10 +26,23 @@ import java.io.SequenceInputStream;
  * {@code verify-mime=true} 但 Tika 不可用时，选择<b>拒绝该次上传</b>（{@code Err(ValidationError)}，
  * 消息提示补齐 {@code tika-core} 依赖）而非静默跳过嗅探——静默放行等于把用户显式打开的安全开关
  * 悄悄关掉，违背"不静默降级"（00-overview.md §2 原则 7）。</p>
+ *
+ * <p><b>流消费契约</b>：{@code verify-mime=false} 时本守卫完全不读取 {@code peekable} 流；
+ * {@code verify-mime=true} 时要求流支持 {@code mark/reset}——嗅探前 {@code mark}、读取头部
+ * 字节后 {@code reset} 复位，保证 05 §8"同一个流先 check 再 put"的示范用法成立（调用方
+ * check 通过后仍可完整读到全部内容）；不支持 {@code mark/reset} 的流会被拒绝并返回带引导的
+ * {@code ValidationError}（如何包装、或如何关闭开关），而非破坏性消费后放行——后者会让守卫
+ * 本身成为上传内容被截断的原因。</p>
  */
 public final class DefaultStorageGuard implements StorageGuard {
 
     private static final String TIKA_PROBE_CLASS = "org.apache.tika.Tika";
+
+    /**
+     * MIME 魔数嗅探读取的头部字节上限；Tika 魔数识别所需远小于此值，取 8KB 以覆盖
+     * 个别头部偏移较深的容器格式。
+     */
+    private static final int SNIFF_HEAD_LIMIT = 8192;
 
     /**
      * 惰性单次探测结果缓存；{@code volatile} 保证跨线程可见，无需额外同步
@@ -97,13 +108,25 @@ public final class DefaultStorageGuard implements StorageGuard {
      * 真正调用 {@link MimeTyping}（进而触碰 Tika 类型）的逻辑拆到独立方法：
      * 只有 {@link #isTikaPresent()} 探测通过后才会执行到这里，保证探测失败分支
      * 永不触发 Tika 类的解析/初始化。
+     *
+     * <p>嗅探经 {@code mark/reset} 保护（{@code mark} 的 readlimit 取嗅探上限 +1，
+     * 确保恰好读满上限字节时 mark 仍有效）：读头部字节后立即 {@code reset} 复位，
+     * 调用方之后从同一个流仍能完整读到全部内容——绝不破坏性消费（缺陷回归见
+     * {@code DefaultStorageGuardTest#verifyMimeTruePreservesStreamForSubsequentFullRead}）。</p>
      */
     private Result<Void, StorageError> sniffAndCompare(UploadCandidate candidate) {
+        InputStream stream = candidate.peekable();
+        if (!stream.markSupported()) {
+            return Result.err(ValidationError.of(
+                    "toolbox.storage.guard.verify-mime=true 要求上传流支持 mark/reset（守卫需在嗅探后复位流，"
+                            + "避免破坏性消费导致后续上传内容缺失）：请用 BufferedInputStream 包装上传流，"
+                            + "或将 toolbox.storage.guard.verify-mime 设为 false"));
+        }
         byte[] head;
-        InputStream restored;
         try {
-            head = readHead(candidate.peekable());
-            restored = new SequenceInputStream(new ByteArrayInputStream(head), candidate.peekable());
+            stream.mark(SNIFF_HEAD_LIMIT + 1);
+            head = stream.readNBytes(SNIFF_HEAD_LIMIT);
+            stream.reset();
         } catch (IOException e) {
             return Result.err(ValidationError.of("读取上传内容用于 MIME 嗅探时发生 IO 异常：" + e.getMessage()));
         }
@@ -115,15 +138,6 @@ public final class DefaultStorageGuard implements StorageGuard {
                     "MIME 校验失败：声明 Content-Type \"" + declared + "\"，实际魔数嗅探为 \"" + sniffed + "\""));
         }
         return Result.ok();
-    }
-
-    /**
-     * 读取用于嗅探的前置字节；不假设 {@code peekable} 支持 {@code mark/reset}，
-     * 读取的字节通过 {@link SequenceInputStream} 拼回原流前部，保证调用方后续仍可
-     * 完整读到全部内容（{@link UploadCandidate} 的 Javadoc 契约）。
-     */
-    private static byte[] readHead(InputStream stream) throws IOException {
-        return stream.readNBytes(8192);
     }
 
     /**
