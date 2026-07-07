@@ -25,6 +25,17 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
  * {@code dialect.handler}——PG 特化 handler 依规则明确允许引用驱动类型）。{@code registry}
  * 包本身也不引用驱动类型（其标准 handler 只用 JDK/{@code java.sql} 标准 API），
  * 未额外强制加入本规则检查范围，但实际状态天然满足。</p>
+ *
+ * <p><b>Task 8 新增子包（{@code params}/{@code mapper}/{@code repository}）的覆盖方式</b>：
+ * {@link TopLevelPackageSliceAssignment} 按"任意 {@code cn.code91.toolbox.database} 下一级
+ * 包名"动态派生 slice，故三个新子包<b>无需修改本类代码</b>即自动纳入规则 1（包无环——实测
+ * 依赖方向为单向 {@code repository → mapper → params → \{annotation, naming\}}，且三者均只
+ * 单向依赖 {@code registry}/{@code spi}/{@code dialect}，无环）与规则 2（不得依赖
+ * {@code autoconfigure}，三者均未引用）。规则 3 的检查范围未扩展到这三个新包——它们不是
+ * "缺可选依赖时仍须可加载的门面层"（L1/L2/L3 本身就是消费 {@code postgresql}/驱动能力的
+ * 执行层，{@code PgJdbcRepository} 等类名已明示其 PG 定位），且实测三者也未直接引用
+ * {@code org.postgresql.**}/{@code com.p6spy.**}（全部通过 {@code registry}/{@code dialect}
+ * 门面间接消费），故规则 3 维持只覆盖 {@code spi}/{@code dialect} 不变。</p>
  */
 class ArchitectureTest {
 
