@@ -19,6 +19,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * 反射驱动的差异引擎实现。遍历规则见 01 设计文档 §4.3，集合范围按控制器裁定 B 收窄为
@@ -62,7 +63,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
         Traversal traversal = new Traversal(options);
         try {
             List<FieldChange> changes = new ArrayList<>();
-            traversal.compare("", null, oldValue, newValue, 0, changes);
+            traversal.compare("", () -> null, oldValue, newValue, 0, changes);
             return Result.ok(new DiffResult(changes));
         } catch (CompareAbortException e) {
             return Result.err(e.error());
@@ -85,18 +86,21 @@ public final class ReflectionDiffEngine implements DiffEngine {
         /**
          * 比较 path 位置的一对新旧值，追加变更到 changes。
          *
-         * @param path     当前字段路径（顶层为空串）
-         * @param label    展示标签（顶层为 null，不产出顶层自身的 FieldChange）
-         * @param oldValue 旧值
-         * @param newValue 新值
-         * @param depth    当前递归深度（顶层对象为 0）
+         * @param path          当前字段路径（顶层为空串）
+         * @param labelSupplier 展示标签的惰性求值（顶层为 null，不产出顶层自身的 FieldChange）；
+         *                      仅在实际产出 FieldChange 时才会被调用（I1 修复：{@code @CompareLabel}
+         *                      的 messageKey 解析依赖调用时 locale，不应对递归展开、未变更的字段
+         *                      也重复解析）
+         * @param oldValue      旧值
+         * @param newValue      新值
+         * @param depth         当前递归深度（顶层对象为 0）
          */
-        void compare(String path, String label, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
+        void compare(String path, Supplier<String> labelSupplier, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
             if (oldValue == null && newValue == null) {
                 return;
             }
             if (oldValue == null || newValue == null) {
-                recordAddedOrRemoved(path, label, oldValue, newValue, changes);
+                recordAddedOrRemoved(path, labelSupplier, oldValue, newValue, changes);
                 return;
             }
 
@@ -108,7 +112,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
 
             ValueComparator<Object> customComparator = findTypeComparator(oldType);
             if (LeafValues.isLeaf(oldType) || customComparator != null) {
-                compareLeaf(path, label, oldValue, newValue, customComparator, changes);
+                compareLeaf(path, labelSupplier, oldValue, newValue, customComparator, changes);
                 return;
             }
             if (oldValue instanceof Map<?, ?> || newValue instanceof Map<?, ?>) {
@@ -118,6 +122,17 @@ public final class ReflectionDiffEngine implements DiffEngine {
             if (oldType.isArray() || oldValue instanceof List<?>) {
                 compareIndexedCollection(path, oldValue, newValue, depth, changes);
                 return;
+            }
+            // P1 集合范围收窄为 List/数组/Map（裁定 B），Set/Queue 等其余 Collection 形态在
+            // 进入对象图前显式拒绝（I2 修复）：放行到 compareObjectGraph 会把 HashSet 这类容器
+            // 当普通 JavaBean 反射展开，钻入 java.base 内部字段（如 HashSet#map）触发
+            // InaccessibleObjectException，且即便侥幸可达也不是用户想要的语义（Set 无序，
+            // 逐字段对比没有意义）。
+            if (oldValue instanceof java.util.Collection<?> || newValue instanceof java.util.Collection<?>) {
+                Class<?> unsupportedType = oldValue instanceof java.util.Collection<?> ? oldType : newType;
+                throw new CompareAbortException(new FieldAccessError(path,
+                        "P1 集合仅支持 List/数组/Map，遇到 " + unsupportedType.getName()
+                                + " 类型请转换或 @CompareIgnore"));
             }
             compareObjectGraph(path, oldValue, newValue, depth, changes);
         }
@@ -156,7 +171,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
         /**
          * 字段级 {@code @CompareWith} 优先，其次应用/内置类型级比较器，最后 {@code Objects.equals} 兜底。
          */
-        private void compareLeaf(String path, String label, Object oldValue, Object newValue,
+        private void compareLeaf(String path, Supplier<String> labelSupplier, Object oldValue, Object newValue,
                                   ValueComparator<Object> typeLevelComparator, List<FieldChange> changes) {
             boolean equal = typeLevelComparator != null
                     ? typeLevelComparator.isEqual(oldValue, newValue)
@@ -164,19 +179,19 @@ public final class ReflectionDiffEngine implements DiffEngine {
             if (equal) {
                 return;
             }
-            changes.add(new FieldChange(path, label, ChangeKind.MODIFIED, oldValue, newValue,
+            changes.add(new FieldChange(path, labelSupplier.get(), ChangeKind.MODIFIED, oldValue, newValue,
                     renderText(oldValue), renderText(newValue)));
         }
 
         /**
          * 字段级 {@code @CompareWith} 比较器实例覆盖叶子/类型级判断，供 {@link #compareField} 调用。
          */
-        private void compareLeafWithFieldOverride(String path, String label, Object oldValue, Object newValue,
+        private void compareLeafWithFieldOverride(String path, Supplier<String> labelSupplier, Object oldValue, Object newValue,
                                                    ValueComparator<Object> fieldComparator, List<FieldChange> changes) {
             if (fieldComparator.isEqual(oldValue, newValue)) {
                 return;
             }
-            changes.add(new FieldChange(path, label, ChangeKind.MODIFIED, oldValue, newValue,
+            changes.add(new FieldChange(path, labelSupplier.get(), ChangeKind.MODIFIED, oldValue, newValue,
                     renderText(oldValue), renderText(newValue)));
         }
 
@@ -206,11 +221,30 @@ public final class ReflectionDiffEngine implements DiffEngine {
         private void compareObjectGraph(String path, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
             enterGraphNode(path, oldValue, newValue, depth);
             try {
-                for (FieldMeta field : metaCache.fieldsOf(oldValue.getClass())) {
+                for (FieldMeta field : fieldsOf(path, oldValue.getClass())) {
                     compareField(path, field, oldValue, newValue, depth, changes);
                 }
             } finally {
                 exitGraphNode(oldValue, newValue);
+            }
+        }
+
+        /**
+         * {@code metaCache.fieldsOf} 内部对未见过的类做反射元数据解析（getter 句柄绑定），
+         * 遇到无公开 getter 的类型（如 {@code java.util.Date}/{@code UUID} 落入
+         * {@code ClassMetaCache} 的字段直接访问兜底分支）会触发 {@code field.setAccessible(true)}，
+         * 对 JDK 内部类字段（{@code java.base} 未 {@code opens} 给未命名模块）抛
+         * {@code InaccessibleObjectException}——一个未受检 {@link RuntimeException}，任其穿透
+         * 违反本引擎"结构性错误一律走 Result#err"的契约（I2 修复）。此处收敛为带路径的
+         * {@link FieldAccessError}。{@code ClassMetaCache} 自身只抛 {@code IllegalStateException}/
+         * JDK 反射异常，不引用本类的 {@link CompareAbortException}，故此处宽 catch 不会误吞
+         * 深度超限/环检测/类型不一致等已在 {@link #compare} 中以更具体错误类型抛出的信号。
+         */
+        private List<FieldMeta> fieldsOf(String path, Class<?> type) {
+            try {
+                return metaCache.fieldsOf(type);
+            } catch (RuntimeException e) {
+                throw new CompareAbortException(FieldAccessError.of(path, e));
             }
         }
 
@@ -230,14 +264,14 @@ public final class ReflectionDiffEngine implements DiffEngine {
                     return;
                 }
                 if (normalizedOld == null || normalizedNew == null) {
-                    recordAddedOrRemoved(path, field.label(), normalizedOld, normalizedNew, changes);
+                    recordAddedOrRemoved(path, field::resolveLabel, normalizedOld, normalizedNew, changes);
                     return;
                 }
-                compareLeafWithFieldOverride(path, field.label(), normalizedOld, normalizedNew, field.compareWith(), changes);
+                compareLeafWithFieldOverride(path, field::resolveLabel, normalizedOld, normalizedNew, field.compareWith(), changes);
                 return;
             }
 
-            compare(path, field.label(), normalizeNullAsEmpty(oldFieldValue), normalizeNullAsEmpty(newFieldValue), depth + 1, changes);
+            compare(path, field::resolveLabel, normalizeNullAsEmpty(oldFieldValue), normalizeNullAsEmpty(newFieldValue), depth + 1, changes);
         }
 
         private Object readField(FieldMeta field, Object target, String path) {
@@ -283,7 +317,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
                         changes.add(new FieldChange(elementPath, elementPath, ChangeKind.ADDED, null, entry.getValue(),
                                 null, renderText(entry.getValue())));
                     } else {
-                        compare(elementPath, elementPath, oldMap.get(key), entry.getValue(), depth + 1, changes);
+                        compare(elementPath, () -> elementPath, oldMap.get(key), entry.getValue(), depth + 1, changes);
                     }
                 }
             } finally {
@@ -302,7 +336,8 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 List<Object> newList = toList(newValue);
                 int commonSize = Math.min(oldList.size(), newList.size());
                 for (int i = 0; i < commonSize; i++) {
-                    compare(path + "[" + i + "]", path + "[" + i + "]", oldList.get(i), newList.get(i), depth + 1, changes);
+                    String elementPath = path + "[" + i + "]";
+                    compare(elementPath, () -> elementPath, oldList.get(i), newList.get(i), depth + 1, changes);
                 }
                 for (int i = commonSize; i < oldList.size(); i++) {
                     Object removed = oldList.get(i);
@@ -321,12 +356,12 @@ public final class ReflectionDiffEngine implements DiffEngine {
             }
         }
 
-        private void recordAddedOrRemoved(String path, String label, Object oldValue, Object newValue, List<FieldChange> changes) {
+        private void recordAddedOrRemoved(String path, Supplier<String> labelSupplier, Object oldValue, Object newValue, List<FieldChange> changes) {
             if (oldValue == null) {
-                changes.add(new FieldChange(path, label, ChangeKind.ADDED, null, newValue,
+                changes.add(new FieldChange(path, labelSupplier.get(), ChangeKind.ADDED, null, newValue,
                         null, renderText(newValue)));
             } else {
-                changes.add(new FieldChange(path, label, ChangeKind.REMOVED, oldValue, null,
+                changes.add(new FieldChange(path, labelSupplier.get(), ChangeKind.REMOVED, oldValue, null,
                         renderText(oldValue), null));
             }
         }

@@ -13,6 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 按类缓存字段/accessor 元数据，同时支持 record（accessor 方法）与普通 JavaBean（getter 方法），
  * 类维度只解析一次。
+ *
+ * <p><b>不缓存标签解析结果</b>（I1 修复）：本缓存只持有注解元数据（{@link Field} 引用、
+ * {@code compareWith} 比较器实例等）与取值句柄——这些对同一 {@code Class} 恒定，类维度缓存安全；
+ * {@code @CompareLabel} 标签的实际解析（依赖调用时 {@code LocaleContextHolder} locale）下沉到
+ * {@link FieldMeta#resolveLabel()}，由遍历期（{@link ReflectionDiffEngine}）按需现查现解析，
+ * 不落入本缓存，否则首个触发线程的 locale 会被后续所有请求永久继承。
  */
 final class ClassMetaCache {
 
@@ -33,9 +39,10 @@ final class ClassMetaCache {
                 continue;
             }
             MethodHandle getter = isRecord ? recordAccessorHandle(type, field) : beanGetterHandle(type, field);
-            String label = LabelResolver.resolve(field);
             var compareWith = FieldMeta.resolveCompareWith(field);
-            result.add(new FieldMeta(field.getName(), label, getter, compareWith));
+            // 标签不在此解析（I1 修复）：见 FieldMeta#resolveLabel 的类级 Javadoc——
+            // messageKey 解析结果依赖调用时 locale，缓存解析结果字符串会冻结首个触发线程的 locale。
+            result.add(new FieldMeta(field.getName(), field, getter, compareWith));
         }
         return List.copyOf(result);
     }
