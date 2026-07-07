@@ -7,6 +7,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
@@ -32,9 +33,15 @@ public final class AwsS3ClientFactory {
     }
 
     public static S3Presigner createS3Presigner(AwsS3Config config) {
+        // S3Presigner.Builder 没有 forcePathStyle 直达方法（不同于 S3ClientBuilder），
+        // path-style 需经 serviceConfiguration(S3Configuration) 显式设置；否则 MinIO 场景下
+        // 签出的 URL 会是虚拟主机风格（<bucket>.<host>），MinIO 默认不解析该风格导致 DNS 解析失败。
         S3Presigner.Builder builder = S3Presigner.builder()
                 .region(Region.of(config.region()))
-                .credentialsProvider(resolveCredentialsProvider(config));
+                .credentialsProvider(resolveCredentialsProvider(config))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(config.pathStyleAccess())
+                        .build());
         applyEndpointOverride(config, builder::endpointOverride);
         return builder.build();
     }

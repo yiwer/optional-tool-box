@@ -158,6 +158,26 @@ class ToolboxStorageAutoConfigurationTest {
     }
 
     @Test
+    void awsS3FailFastCredentialErrorPropagatesAsContextStartupFailure() {
+        // 凭证裁定 B：factory 构造期校验（fail-fast）；本测试验证该校验确实在 Spring 容器
+        // 启动期生效并使容器刷新失败，而非被吞没或延迟到首次 get() 才暴露。region 显式给出
+        // 有效值，确保失败原因确是"AK/SK 只给一个"而非其他必填项缺失。
+        contextRunner
+                .withPropertyValues(
+                        "toolbox.storage.type=aws-s3",
+                        "toolbox.storage.aws-s3.region=us-east-1",
+                        "toolbox.storage.aws-s3.access-key-id=only-id-no-secret")
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void aliyunOssFailFastCredentialErrorPropagatesAsContextStartupFailure() {
+        contextRunner
+                .withPropertyValues("toolbox.storage.type=aliyun-oss")
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
     void userDefinedObjectStoreRegistryTakesPrecedence() {
         contextRunner.withUserConfiguration(CustomRegistryConfig.class).run(context -> {
             assertThat(context).hasSingleBean(ObjectStoreRegistry.class);

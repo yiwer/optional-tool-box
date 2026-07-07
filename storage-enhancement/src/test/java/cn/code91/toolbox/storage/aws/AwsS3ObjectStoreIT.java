@@ -17,10 +17,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -29,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@link AwsS3ObjectStore} 集成测试：Testcontainers {@link MinIOContainer}，全 op 回环 +
- * presignedPut/Get 用 {@link HttpClient} 真实 PUT/GET 断言内容一致（05 §9）。
+ * presignedPut/Get 真实 HTTP PUT/GET 断言内容一致（05 §9；presigned 测试方法内对 HTTP 客户端
+ * 选型的已披露偏差见该方法 Javadoc）。
  *
  * <p>MinIO 即"S3 兼容"路径的持续验证（endpoint + path-style-access=true，00-overview.md §7
  * 测试策略）；无 Docker 时整体跳过（{@code disabledWithoutDocker=true}），不影响无 Docker 环境
@@ -129,11 +128,24 @@ class AwsS3ObjectStoreIT {
         assertThat(keys).contains("listing/a.txt", "listing/b.txt").doesNotContain("other/c.txt");
     }
 
+    /**
+     * presignedPut/Get 真实 HTTP PUT/GET 断言内容一致（05 §9）。
+     *
+     * <p><b>已披露偏差</b>：简报原文指定用 {@code java.net.http.HttpClient}，但该类在本次执行
+     * 所在的沙箱环境中对任意 URL（含与本模块/Docker 完全无关的 {@code https://example.com}）
+     * 构造即抛 {@code IOException: Unable to establish loopback connection}——根因是 JDK 21.0.10
+     * 的 {@code java.nio.channels.Pipe} 默认实现在 Windows 上经由 AF_UNIX socket 建立内部自管道，
+     * 而该沙箱的 AF_UNIX 支持对 {@code connect()} 返回 {@code Invalid argument}（已用 4 行最小复现
+     * 程序验证，排除了 SelectorProvider/executor/HTTP 版本/IPv4-IPv6 偏好/tmpdir 路径等变量）。
+     * 这与本模块代码、MinIO、Docker 均无关——同一 JVM 里 {@link java.net.HttpURLConnection}
+     * （经典阻塞 socket，不走 {@code Selector}）对同一批 URL 请求成功。故本测试改用
+     * {@code HttpURLConnection} 验证同一件事（预签名 URL 可被独立 HTTP 客户端真实 PUT/GET），
+     * 保留原测试意图，仅替换因环境缺陷而不可用的具体传输类。</p>
+     */
     @Test
-    void presignedPutAllowsRealHttpUploadThenPresignedGetDownloadsSameContent() throws IOException, InterruptedException {
+    void presignedPutAllowsRealHttpUploadThenPresignedGetDownloadsSameContent() throws IOException {
         String key = "presigned/upload.txt";
         byte[] content = "uploaded via presigned PUT over real HTTP".getBytes(StandardCharsets.UTF_8);
-        HttpClient httpClient = HttpClient.newHttpClient();
 
         Result<PresignedUrl, StorageError> putUrlResult =
                 store.presignedPut(key, Duration.ofMinutes(10), "text/plain");
@@ -141,22 +153,48 @@ class AwsS3ObjectStoreIT {
         PresignedUrl putUrl = putUrlResult.get();
         assertThat(putUrl.method()).isEqualTo("PUT");
 
-        HttpRequest putRequest = HttpRequest.newBuilder(URI.create(putUrl.url()))
-                .header("Content-Type", "text/plain")
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(content))
-                .build();
-        HttpResponse<Void> putResponse = httpClient.send(putRequest, HttpResponse.BodyHandlers.discarding());
-        assertThat(putResponse.statusCode()).as("真实 HTTP PUT 应成功").isBetween(200, 299);
+        int putStatus = sendPut(putUrl.url(), content, "text/plain");
+        assertThat(putStatus).as("真实 HTTP PUT 应成功").isBetween(200, 299);
 
         Result<PresignedUrl, StorageError> getUrlResult = store.presignedGet(key, Duration.ofMinutes(10));
         assertThat(getUrlResult.isOk()).isTrue();
         PresignedUrl getUrl = getUrlResult.get();
         assertThat(getUrl.method()).isEqualTo("GET");
 
-        HttpRequest getRequest = HttpRequest.newBuilder(URI.create(getUrl.url())).GET().build();
-        HttpResponse<byte[]> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofByteArray());
+        HttpGetResult getResult = sendGet(getUrl.url());
 
-        assertThat(getResponse.statusCode()).as("真实 HTTP GET 应成功").isBetween(200, 299);
-        assertThat(getResponse.body()).isEqualTo(content);
+        assertThat(getResult.statusCode()).as("真实 HTTP GET 应成功").isBetween(200, 299);
+        assertThat(getResult.body()).isEqualTo(content);
+    }
+
+    private static int sendPut(String url, byte[] body, String contentType) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        try {
+            connection.setRequestMethod("PUT");
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", contentType);
+            connection.setFixedLengthStreamingMode(body.length);
+            try (var out = connection.getOutputStream()) {
+                out.write(body);
+            }
+            return connection.getResponseCode();
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private static HttpGetResult sendGet(String url) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        try {
+            connection.setRequestMethod("GET");
+            int status = connection.getResponseCode();
+            byte[] body = connection.getInputStream().readAllBytes();
+            return new HttpGetResult(status, body);
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private record HttpGetResult(int statusCode, byte[] body) {
     }
 }
