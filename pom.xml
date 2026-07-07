@@ -30,6 +30,8 @@
         <p6spy.version>3.9.1</p6spy.version>
         <postgresql.version>42.7.8</postgresql.version>
         <greenmail.version>2.1.3</greenmail.version>
+        <!-- llm-enhancement WireMock 契约测试（test-only）；最新 3.x GA（4.0 尚为 beta，不采用）。 -->
+        <wiremock.version>3.13.2</wiremock.version>
         <!-- server-facility 自身将 tika-core 声明为 optional（不透传）；storage-enhancement 的
              上传守卫直接使用 MimeTyping（内部依赖 Tika），版本对齐 server-facility 实测所用版本。 -->
         <tika.version>3.2.3</tika.version>
@@ -116,6 +118,13 @@
                 <groupId>com.icegreen</groupId>
                 <artifactId>greenmail</artifactId>
                 <version>${greenmail.version}</version>
+            </dependency>
+            <dependency>
+                <!-- llm-enhancement 的 WireMock 契约测试直接使用的 test 构件此前无版本管理
+                     （M2 授权 b：直接使用且缺 pin 需补），版本取 Maven Central 最新 3.x GA。 -->
+                <groupId>org.wiremock</groupId>
+                <artifactId>wiremock</artifactId>
+                <version>${wiremock.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
