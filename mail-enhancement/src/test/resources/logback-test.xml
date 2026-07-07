@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      GreenMail 每个测试方法启停内嵌 SMTP，固定打印大量 Starting/Stopping INFO 噪音，
+      测试作用域内收敛到 WARN（参照 compare 模块对 facility.json 的降噪做法）。
+    -->
+    <logger name="com.icegreen.greenmail" level="WARN"/>
+
+    <!--
+      本模块的沙箱启用 WARN、redirect 记录与 listener 回调异常 WARN 是测试矩阵刻意触发的
+      预期行为（裁定 B / brief 回调语义），属预期输出而非缺陷，测试作用域内调至 OFF
+      避免告警噪音污染 mvn verify 输出；生产作用域不受影响。
+    -->
+    <logger name="cn.code91.toolbox.mail" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
