@@ -14,12 +14,15 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.MessageSource;
+import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.ResourceBundleMessageSource;
 
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 装配测试：enabled 开关、Seam 覆盖（@ConditionalOnMissingBean）、SPI 收集顺序、
@@ -114,9 +117,19 @@ class ToolboxCompareAutoConfigurationTest {
         });
     }
 
+    /**
+     * I4 修复：{@code order.amount} 曾是误留在生产 bundle
+     * （{@code src/main/resources/i18n/toolbox-compare-messages*.properties}）的示例/测试键——
+     * facility {@code AggregatedMessageSource}（{@code @Primary}）会把它聚合暴露给任何引入
+     * compare 的应用，高碰撞命名可能遮蔽消费方同名键。本测试用
+     * {@link TestOnlyMessageSourceConfig} 覆盖 {@code toolboxCompareMessageSource} bean，
+     * 指向仅存在于 {@code src/test/resources} 的测试专用 bundle，既验证 messageKey 确实
+     * "经真实 MessageSource 解析"（而非绕过 Spring 直接读 properties），又不再依赖生产 bundle
+     * 携带示例键。
+     */
     @Test
     void messageKeyResolvesThroughWiredMessageSourceInBothLocales() {
-        contextRunner.run(context -> {
+        contextRunner.withUserConfiguration(TestOnlyMessageSourceConfig.class).run(context -> {
             MessageSource messageSource = context.getBean("toolboxCompareMessageSource", MessageSource.class);
 
             String zh = messageSource.getMessage("order.amount", null, Locale.SIMPLIFIED_CHINESE);
@@ -124,6 +137,22 @@ class ToolboxCompareAutoConfigurationTest {
 
             assertThat(zh).isEqualTo("订单金额");
             assertThat(en).isEqualTo("Order Amount");
+        });
+    }
+
+    /**
+     * I4 回归护栏：默认装配（未被测试配置覆盖）下的生产 {@code toolboxCompareMessageSource}
+     * bean 不应再解析出 {@code order.amount}——证明该示例键已从生产 bundle 移除，不会通过
+     * facility {@code AggregatedMessageSource} 泄漏给消费方。
+     */
+    @Test
+    void productionMessageSourceNoLongerLeaksExampleKey() {
+        contextRunner.run(context -> {
+            MessageSource messageSource = context.getBean("toolboxCompareMessageSource", MessageSource.class);
+
+            assertThatThrownBy(() -> messageSource.getMessage("order.amount", null, Locale.ENGLISH))
+                    .as("生产 bundle 不应再携带 order.amount 示例键")
+                    .isInstanceOf(NoSuchMessageException.class);
         });
     }
 
@@ -177,6 +206,24 @@ class ToolboxCompareAutoConfigurationTest {
                     return true;
                 }
             };
+        }
+    }
+
+    /**
+     * I4 修复：测试专用 {@code toolboxCompareMessageSource} bean，指向仅存在于
+     * {@code src/test/resources/i18n/test-compare-messages*.properties} 的测试 bundle
+     * （bean 名与生产 bean 相同，经 {@code @ConditionalOnMissingBean(name=...)} 让位后由本配置接管）。
+     */
+    @Configuration
+    static class TestOnlyMessageSourceConfig {
+        @Bean("toolboxCompareMessageSource")
+        ResourceBundleMessageSource toolboxCompareMessageSource() {
+            ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+            messageSource.setBasename("i18n/test-compare-messages");
+            messageSource.setDefaultEncoding("UTF-8");
+            messageSource.setUseCodeAsDefaultMessage(false);
+            messageSource.setFallbackToSystemLocale(false);
+            return messageSource;
         }
     }
 

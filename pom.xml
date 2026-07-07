@@ -25,7 +25,6 @@
         <spring-boot.version>3.5.10</spring-boot.version>
         <server-facility.version>0.1.0-SNAPSHOT</server-facility.version>
         <aws-bom.version>2.41.14</aws-bom.version>
-        <testcontainers-bom.version>1.20.4</testcontainers-bom.version>
         <aliyun-sdk-oss.version>3.18.1</aliyun-sdk-oss.version>
         <archunit.version>1.3.0</archunit.version>
         <p6spy.version>3.9.1</p6spy.version>
@@ -53,13 +52,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <dependency>
-                <groupId>org.testcontainers</groupId>
-                <artifactId>testcontainers-bom</artifactId>
-                <version>${testcontainers-bom.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!-- testcontainers 版本由 Spring Boot BOM 统一接管（其自身 import testcontainers-bom） -->
 
             <!-- pin：版本不由上述 BOM 管理的内部/第三方依赖 -->
             <dependency>
@@ -146,6 +139,12 @@
                             <include>**/*Test.java</include>
                             <include>**/*IT.java</include>
                         </includes>
+                        <!-- @{argLine} 承接 jacoco prepare-agent 注入的 -javaagent 参数（延迟求值，
+                             必须用 @{} 而非 ${}，否则拿不到 prepare-agent 在更早阶段计算出的值）；
+                             追加 -XX:+EnableDynamicAgentLoading 消除 Mockito inline-mock-maker 自附加
+                             ByteBuddy agent 时的 "A Java agent has been loaded dynamically" 告警
+                             （遗留#11）。 -->
+                        <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
                     </configuration>
                 </plugin>
                 <plugin>
