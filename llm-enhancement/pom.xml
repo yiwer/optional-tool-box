@@ -36,10 +36,6 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-beans</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-core</artifactId>
-        </dependency>
         <!-- 裁定 E：facility HttpClients 是单容器级共享 RestClient 的静态门面，无法承载"每模型
              独立 base-url/api-key/timeout"与"读取错误响应体做精细映射"的需求（HttpClients.post
              的错误通道只收敛 HTTP 状态码，拿不到响应体/头）。故按裁定 E 的兜底条款直接使用 Spring
@@ -56,6 +52,14 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- openai 包的请求/响应 DTO（OpenAiChatCompletionRequest 等）直接使用
+             @JsonProperty/@JsonInclude/@JsonIgnoreProperties 注解；这些类型位于
+             jackson-annotations，此前仅由 server-facility 传递引入（JsonUtil 内部依赖），
+             依赖账目守卫要求直接使用必须显式声明（同 compare/storage/mail 教训）。 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
         </dependency>
 
         <dependency>
@@ -103,10 +107,45 @@
             <artifactId>archunit</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- WireMock 契约测试（无 Docker）：模拟 OpenAI 兼容 /chat/completions 端点。用
-             wiremock-jetty12 而非裸 wiremock——父 pom 该坐标的版本管理注释详述了原因
-             （裸 wiremock 传递的部分 Jetty 坐标仍是 11，与 Boot 3.5 BOM 管理的 Jetty 12 冲突，
-             导致 WireMockServer 启动期报 "Jetty 11 is not present"）。 -->
+        <!-- WireMock 契约测试（无 Docker）：模拟 OpenAI 兼容 /chat/completions 端点。测试代码
+             直接 import com.github.tomakehurst.wiremock.* 核心 API（WireMockServer/WireMock），
+             这些类位于 org.wiremock:wiremock 本体，需显式声明（依赖账目守卫）。排除其内部仍以
+             Jetty 11 坐标声明的四个传递依赖——同 wiremock-jetty12 官方构件自身对 wiremock 依赖边
+             的排除写法一致（其 POM 明确排除全部 org.eclipse.jetty:* 再重声明 Jetty 12 坐标）：
+             (1) jetty-servlet/jetty-servlets/jetty-webapp（Jetty 12 对应 jetty-ee10-* 系列，
+             wiremock-jetty12 会补齐）；(2) org.eclipse.jetty.http2:http2-server（Jetty 12 已
+             改名为 jetty-http2-server，两个不同 artifactId 会同时出现在类路径——实测踩坑：
+             HttpChannelOverHTTP2 在两个大版本间不兼容导致 IncompatibleClassChangeError，
+             必须显式排除旧 artifactId，仅凭"重复坐标最近路径优先"的常规依赖调解规则无法处理
+             不同 artifactId 的情形）。 -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-servlet</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-servlets</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-webapp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty.http2</groupId>
+                    <artifactId>http2-server</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- wiremock-jetty12 提供 Jetty 12 版 HttpServerFactory 实现与上方排除的三个坐标的
+             Jetty 12 等价物（jetty-ee10-servlet/jetty-ee10-servlets/jetty-ee10-webapp）；
+             它通过 ServiceLoader 机制被 WireMockServer 内部发现装配，字节码层面不会被直接
+             引用类名，是 analyze "未使用"误报的必然结果（同 mail 对 spring-boot-starter-mail
+             聚合依赖的先例：保留声明本身是让消费方看到完整依赖矩阵）。 -->
         <dependency>
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock-jetty12</artifactId>
@@ -128,6 +167,9 @@
                                 <!-- 父 pom 既有两条聚合 artifact 误报（完整重列，避免依赖插件配置合并顺序）。 -->
                                 <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-test</ignoredUnusedDeclaredDependency>
                                 <ignoredUnusedDeclaredDependency>com.tngtech.archunit:archunit-junit5</ignoredUnusedDeclaredDependency>
+                                <!-- wiremock-jetty12：ServiceLoader 装配的 HttpServerFactory 扩展，字节码
+                                     层面不会被直接引用类名（上方依赖声明处已详述原因）。 -->
+                                <ignoredUnusedDeclaredDependency>org.wiremock:wiremock-jetty12</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
                         </configuration>
                     </execution>
