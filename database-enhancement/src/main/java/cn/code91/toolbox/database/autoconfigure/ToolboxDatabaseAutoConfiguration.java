@@ -58,11 +58,16 @@ public class ToolboxDatabaseAutoConfiguration {
      * {@code FieldHandler<?>} bean 与 {@link FieldHandlerRegistryCustomizer} bean，
      * 最终 {@code freeze()}（运行期不可变，见 {@link FieldHandlerRegistry} 类文档）。
      *
-     * <p>顺序说明：方言 handler 先于标准 handler 注册，是为了让"alias 不反盖"规则在两者
-     * 有 javaType 冲突时保持确定性——不过 P1 的标准 handler 与 PG 特化 handler 覆盖的
-     * javaType 集合刻意不重叠（如 uuid/timestamptz 走 sqlType 精确路由，不占用
-     * {@code byJavaType} 通用 slot），故先后顺序在当前内置集下不影响可观察行为，
-     * 但作为未来扩展的契约仍显式声明。</p>
+     * <p>顺序说明：OffsetDateTime/UUID 这两个 javaType slot 实际由标准 handler
+     * （{@code OffsetDateTimeHandler}/{@code UuidHandler}）与 PG 特化 handler
+     * （{@code PgTimestamptzHandler}/{@code PgUuidHandler}）共享。PG handler 先注册时会
+     * 先占住空 slot，但标准 handler 后注册且不带 {@code sqlTypeAlias}，按 {@link
+     * FieldHandlerRegistry#register} 规则无条件覆盖——故最终 {@code byJavaType} 落地的是
+     * <b>标准 handler</b>。这不影响可观察行为：两者 read/write 逻辑逐字节相同（均委托
+     * {@code rs.getObject(idx, X.class)}），且 PG 变体仍经 {@code sqlType} 别名
+     * （{@code "timestamptz"}/{@code "uuid"}）精确路由可达，不受 {@code byJavaType}
+     * 归属影响。方言 handler 先于标准 handler 注册这一顺序，是为未来"某 javaType 只有
+     * 方言特化、无标准对应物"的场景保留"先占先得"的确定性契约。</p>
      */
     @Bean
     @ConditionalOnMissingBean
