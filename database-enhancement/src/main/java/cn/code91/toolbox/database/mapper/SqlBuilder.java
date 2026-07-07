@@ -1,6 +1,5 @@
 package cn.code91.toolbox.database.mapper;
 
-import cn.code91.toolbox.database.annotation.Table;
 import cn.code91.toolbox.database.naming.ColumnNamingStrategy;
 import cn.code91.toolbox.database.params.EntityIntrospector;
 import cn.code91.toolbox.database.params.EntityMeta;
@@ -14,7 +13,8 @@ import java.util.List;
  * <p>从 L1 {@link EntityMeta} 生成四个 by-id CRUD SQL 文本。占位符用 SQL 列名（与
  * {@link cn.code91.toolbox.database.params.AnnotatedParameterSource} 双 key 的列名侧对齐，
  * 生成 SQL 与手写 SQL 可共用同一参数源）。表名解析：{@code @Table.value} 优先，否则类名经
- * {@link ColumnNamingStrategy#CAMEL_TO_UNDERSCORE} 推算。</p>
+ * {@link ColumnNamingStrategy#CAMEL_TO_UNDERSCORE} 推算——具体实现见
+ * {@link EntityIntrospector#resolveTableName}（与 {@code PgJdbcRepository} 共用）。</p>
  *
  * <p>{@link ClassValue} 缓存 per-class {@code EnumMap<OpKind, String>}：同一 entity 反复调用
  * 返回同一 String 引用（identity-stable）。</p>
@@ -24,8 +24,6 @@ import java.util.List;
  * {@code @Table.value} 为空串 → ISE（均为配置期校验 fail-fast，约束 3 允许的形态）。</p>
  */
 public final class SqlBuilder {
-
-    private static final ColumnNamingStrategy NAMING = ColumnNamingStrategy.CAMEL_TO_UNDERSCORE;
 
     private static final ClassValue<EnumMap<OpKind, String>> CACHE = new ClassValue<>() {
         @Override
@@ -84,26 +82,13 @@ public final class SqlBuilder {
             throw new IllegalStateException(
                     "entity " + entityClass.getName() + " has no @Id field, op " + op + " requires @Id");
         }
-        String table = resolveTableName(entityClass);
+        String table = EntityIntrospector.resolveTableName(entityClass);
         return switch (op) {
             case INSERT -> buildInsert(table, fields);
             case UPDATE_BY_ID -> buildUpdateById(table, fields, idFields.get(0));
             case SELECT_BY_ID -> buildSelectById(table, fields, idFields.get(0));
             case DELETE_BY_ID -> buildDeleteById(table, idFields.get(0));
         };
-    }
-
-    private static String resolveTableName(Class<?> entityClass) {
-        Table ann = entityClass.getAnnotation(Table.class);
-        if (ann != null) {
-            String v = ann.value();
-            if (v.isEmpty()) {
-                throw new IllegalStateException(
-                        "@Table.value must be non-empty on " + entityClass.getName());
-            }
-            return v;
-        }
-        return NAMING.toColumnName(entityClass.getSimpleName());
     }
 
     private static String buildInsert(String table, List<FieldMapping> fields) {

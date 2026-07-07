@@ -2,6 +2,7 @@ package cn.code91.toolbox.database.params;
 
 import cn.code91.toolbox.database.annotation.Column;
 import cn.code91.toolbox.database.annotation.Id;
+import cn.code91.toolbox.database.annotation.Table;
 import cn.code91.toolbox.database.annotation.Transient;
 import cn.code91.toolbox.database.naming.ColumnNamingStrategy;
 
@@ -52,6 +53,25 @@ public final class EntityIntrospector {
      */
     public static EntityMeta of(Class<?> entityClass, ColumnNamingStrategy strategy) {
         return introspect(entityClass, strategy);
+    }
+
+    /**
+     * 解析 entity 对应的物理表名：{@link Table#value()} 优先，否则类名经
+     * {@link ColumnNamingStrategy#CAMEL_TO_UNDERSCORE} 推算。
+     * <p>{@code SqlBuilder}（mapper 包）与 {@code PgJdbcRepository}（repository 包）共用此实现
+     * （两者均已依赖本类，提取到此处不引入新的跨包依赖方向）。</p>
+     */
+    public static String resolveTableName(Class<?> entityClass) {
+        Table ann = entityClass.getAnnotation(Table.class);
+        if (ann != null) {
+            String v = ann.value();
+            if (v.isEmpty()) {
+                throw new IllegalStateException(
+                        "@Table.value must be non-empty on " + entityClass.getName());
+            }
+            return v;
+        }
+        return ColumnNamingStrategy.CAMEL_TO_UNDERSCORE.toColumnName(entityClass.getSimpleName());
     }
 
     private static EntityMeta introspect(Class<?> entityClass, ColumnNamingStrategy strategy) {

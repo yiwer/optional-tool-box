@@ -1,10 +1,8 @@
 package cn.code91.toolbox.database.repository;
 
-import cn.code91.toolbox.database.annotation.Table;
 import cn.code91.toolbox.database.dialect.SqlDialect;
 import cn.code91.toolbox.database.mapper.EntityRowMapper;
 import cn.code91.toolbox.database.mapper.SqlBuilder;
-import cn.code91.toolbox.database.naming.ColumnNamingStrategy;
 import cn.code91.toolbox.database.params.AnnotatedParameterSource;
 import cn.code91.toolbox.database.params.EntityIntrospector;
 import cn.code91.toolbox.database.params.FieldMapping;
@@ -78,7 +76,7 @@ public final class PgJdbcRepository<T, ID> implements JdbcRepository<T, ID> {
                         "entity " + entityClass.getName()
                                 + " has no @Id field, required by JdbcRepository"));
 
-        String tableName = resolveTableName(entityClass);
+        String tableName = EntityIntrospector.resolveTableName(entityClass);
         this.existsByIdSql = "SELECT 1 FROM " + tableName
                 + " WHERE " + this.idColumnName + " = :" + this.idColumnName + " LIMIT 1";
         this.countSql = "SELECT COUNT(*) FROM " + tableName;
@@ -90,19 +88,6 @@ public final class PgJdbcRepository<T, ID> implements JdbcRepository<T, ID> {
                 + " ORDER BY " + this.idColumnName;
 
         this.rowMapper = new EntityRowMapper<>(entityClass, registry);
-    }
-
-    private static String resolveTableName(Class<?> entityClass) {
-        Table ann = entityClass.getAnnotation(Table.class);
-        if (ann != null) {
-            String v = ann.value();
-            if (v.isEmpty()) {
-                throw new IllegalStateException(
-                        "@Table.value must be non-empty on " + entityClass.getName());
-            }
-            return v;
-        }
-        return ColumnNamingStrategy.CAMEL_TO_UNDERSCORE.toColumnName(entityClass.getSimpleName());
     }
 
     @Override
