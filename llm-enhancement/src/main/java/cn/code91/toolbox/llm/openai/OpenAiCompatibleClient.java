@@ -188,6 +188,11 @@ public final class OpenAiCompatibleClient implements LlmClient {
     /**
      * 从文本中截取首个 JSON 容器起止之间的子串，兜底"前后带散文"的情形（如模型输出
      * "以下是结果：{...}，希望有帮助"）。找不到容器边界符时原样返回，交由下游解析报错。
+     *
+     * <p><b>已知启发式局限</b>（裁定 B / 设计 §10「结构化输出的现实鲁棒性」——剥壳为启发式，
+     * 失败保留原文）：以"首个 { 或 [ 到最后一个匹配闭合符"为界；若前导散文自身含花括号
+     * （如 "请用 {k:v} 这种格式：{...}"），会从错误的开括号起截而解析失败，返回 SchemaMismatch
+     * （原始文本随错误保留，不崩溃）。P1 接受此局限——提示词明确"只输出 JSON"即可规避。
      */
     private static String extractJsonCandidate(String text) {
         int objStart = text.indexOf('{');
@@ -218,6 +223,11 @@ public final class OpenAiCompatibleClient implements LlmClient {
     /**
      * 裁定 F：{@code rate-limit-qps<=0} 完全不触碰限流门；命中时携带 {@code retryAfterMillis}
      * 建议等待直返，<b>不阻塞等待</b>。key 按模型名隔离。
+     *
+     * <p>令牌桶容量取 {@code capacity = max(1, round(qps))}：突发容忍度约为「1 秒的许可量」
+     * （四舍五入），并以 1 为下限——保证 {@code qps∈(0,0.5)} 这类极低速率仍能放行首个请求而非
+     * 恒拒。补充速率仍为 {@code qps}（每秒），故稳态吞吐严格受 {@code rate-limit-qps} 约束，
+     * 桶容量只影响瞬时突发的宽容程度。
      */
     private LlmError checkRateLimit() {
         if (config.rateLimitQps() <= 0) {
