@@ -4,6 +4,7 @@ import cn.code91.toolbox.llm.core.DefaultLlmClientRegistry;
 import cn.code91.toolbox.llm.core.LlmClient;
 import cn.code91.toolbox.llm.core.LlmClientRegistry;
 import cn.code91.toolbox.llm.openai.OpenAiCompatibleClient;
+import cn.code91.toolbox.llm.openai.OpenAiLogSettings;
 import cn.code91.toolbox.llm.openai.OpenAiModelConfig;
 import cn.code91.toolbox.llm.prompt.ClasspathPromptTemplateLoader;
 import cn.code91.toolbox.llm.spi.PromptTemplateLoader;
@@ -50,9 +51,11 @@ public class ToolboxLlmAutoConfiguration {
     public LlmClientRegistry llmClientRegistry(ToolboxLlmProperties properties,
                                                ObjectProvider<UsageListener> listeners) {
         List<UsageListener> listenerList = listeners.orderedStream().toList();
+        OpenAiLogSettings logSettings =
+                new OpenAiLogSettings(properties.log().enabled(), properties.log().maskContent());
         Map<String, LlmClient> clients = new LinkedHashMap<>();
         properties.models().forEach((name, model) ->
-                clients.put(name, buildClient(name, model, listenerList)));
+                clients.put(name, buildClient(name, model, listenerList, logSettings)));
         return new DefaultLlmClientRegistry(clients, properties.primary());
     }
 
@@ -62,7 +65,7 @@ public class ToolboxLlmAutoConfiguration {
      * （同一裁定 D 精神：宁可拦在启动期，不留到运行期才发现配错）。
      */
     private static LlmClient buildClient(String name, ToolboxLlmProperties.Model model,
-                                         List<UsageListener> listeners) {
+                                         List<UsageListener> listeners, OpenAiLogSettings logSettings) {
         if (!"openai-compatible".equals(model.type())) {
             throw new IllegalStateException(
                     "模型 \"" + name + "\" 配置了未识别的 type=\"" + model.type()
@@ -73,6 +76,6 @@ public class ToolboxLlmAutoConfiguration {
                 model.temperature(), model.maxTokens(), model.timeout(),
                 model.maxRetries() == null ? -1 : model.maxRetries(),
                 (Duration) null, model.rateLimitQps() == null ? 0 : model.rateLimitQps());
-        return new OpenAiCompatibleClient(config, listeners);
+        return new OpenAiCompatibleClient(config, listeners, logSettings);
     }
 }

@@ -2,6 +2,7 @@ package cn.code91.toolbox.llm.openai;
 
 import cn.code91.facility.json.JsonUtil;
 import cn.code91.facility.log.LogUtil;
+import cn.code91.facility.masking.MaskUtil;
 import cn.code91.facility.ratelimit.RateLimitResult;
 import cn.code91.facility.ratelimit.RateLimiterUtil;
 import cn.code91.facility.result.Result;
@@ -58,24 +59,49 @@ public final class OpenAiCompatibleClient implements LlmClient {
         void sleep(Duration duration) throws InterruptedException;
     }
 
+    /** 响应内容日志预览的最大字符数（超出截断，避免超长响应刷屏日志）。 */
+    private static final int RESPONSE_PREVIEW_LIMIT = 500;
+
     private final OpenAiModelConfig config;
     private final List<UsageListener> usageListeners;
+    private final OpenAiLogSettings logSettings;
     private final RateLimitGate rateLimitGate;
     private final Sleeper sleeper;
     private final RestClient restClient;
     private final OpenAiErrorMapper errorMapper = new OpenAiErrorMapper();
 
     /**
-     * 生产构造：限流门委托 facility {@link RateLimiterUtil}，退避真实睡眠。
+     * 生产构造（日志默认开+预脱敏）：限流门委托 facility {@link RateLimiterUtil}，退避真实睡眠。
      */
     public OpenAiCompatibleClient(OpenAiModelConfig config, List<UsageListener> usageListeners) {
-        this(config, usageListeners, RateLimiterUtil::acquire, duration -> Thread.sleep(duration.toMillis()));
+        this(config, usageListeners, OpenAiLogSettings.defaults());
     }
 
+    /**
+     * 生产构造：显式传入模块级日志开关（{@code toolbox.llm.log.*}），供 autoconfigure 使用。
+     */
+    public OpenAiCompatibleClient(OpenAiModelConfig config, List<UsageListener> usageListeners,
+                                  OpenAiLogSettings logSettings) {
+        this(config, usageListeners, logSettings,
+                RateLimiterUtil::acquire, duration -> Thread.sleep(duration.toMillis()));
+    }
+
+    /**
+     * 测试构造（日志默认开+预脱敏）：注入限流门与退避 Seam。
+     */
     OpenAiCompatibleClient(OpenAiModelConfig config, List<UsageListener> usageListeners,
                            RateLimitGate rateLimitGate, Sleeper sleeper) {
+        this(config, usageListeners, OpenAiLogSettings.defaults(), rateLimitGate, sleeper);
+    }
+
+    /**
+     * 全参构造（唯一实赋值处，其余构造器均委托到此）。
+     */
+    OpenAiCompatibleClient(OpenAiModelConfig config, List<UsageListener> usageListeners,
+                           OpenAiLogSettings logSettings, RateLimitGate rateLimitGate, Sleeper sleeper) {
         this.config = config;
         this.usageListeners = usageListeners == null ? List.of() : List.copyOf(usageListeners);
+        this.logSettings = logSettings == null ? OpenAiLogSettings.defaults() : logSettings;
         this.rateLimitGate = rateLimitGate;
         this.sleeper = sleeper;
         this.restClient = buildRestClient(config);
@@ -104,6 +130,7 @@ public final class OpenAiCompatibleClient implements LlmClient {
         Instant start = Instant.now();
         Result<ChatResponse, LlmError> result = sendWithRetry(request);
         if (result.isOk()) {
+            logResponse(result.get());
             notifyUsageListeners(result.get().usage(), Duration.between(start, Instant.now()));
         }
         return result;
@@ -208,10 +235,14 @@ public final class OpenAiCompatibleClient implements LlmClient {
     }
 
     /**
-     * 脱敏日志（全局约束 12）：请求消息内容经 {@code LogUtil}（写前自动 {@code MaskUtil} 脱敏，
-     * 默认开）记录；<b>不记录 api-key</b>（Authorization 头值从不进日志）。
+     * 请求内容日志（{@code toolbox.llm.log.*} + 全局约束 12）：{@code log.enabled=false} 时完全
+     * 不记录；否则拼接各消息 role:content 预览，按 {@code log.mask-content} 决定是否本模块预脱敏后
+     * 经 {@code LogUtil} 记录。<b>不记录 api-key</b>（Authorization 头值从不进日志）。
      */
     private void logRequest(ChatRequest request) {
+        if (!logSettings.enabled()) {
+            return;
+        }
         StringBuilder preview = new StringBuilder();
         for (Message message : request.messages()) {
             if (!preview.isEmpty()) {
@@ -219,7 +250,30 @@ public final class OpenAiCompatibleClient implements LlmClient {
             }
             preview.append(message.role()).append(": ").append(message.content());
         }
-        LogUtil.info("toolbox.llm 请求模型 \"{}\"：{}", config.modelName(), preview.toString());
+        LogUtil.info("toolbox.llm 请求模型 \"{}\"：{}", config.modelName(), maskIfEnabled(preview.toString()));
+    }
+
+    /**
+     * 响应内容日志（{@code toolbox.llm.log.*}，设计 §4.4"请求/响应日志"）：{@code log.enabled=false}
+     * 时完全不记录；否则记录截断后的响应内容预览，同样按 {@code log.mask-content} 决定是否预脱敏。
+     */
+    private void logResponse(ChatResponse response) {
+        if (!logSettings.enabled()) {
+            return;
+        }
+        String content = response.content() == null ? "" : response.content();
+        String preview = content.length() > RESPONSE_PREVIEW_LIMIT
+                ? content.substring(0, RESPONSE_PREVIEW_LIMIT) + "…" : content;
+        LogUtil.info("toolbox.llm 模型 \"{}\" 响应：{}", config.modelName(), maskIfEnabled(preview));
+    }
+
+    /**
+     * 按 {@code log.mask-content} 决定本模块是否显式脱敏：开则 {@code MaskUtil.mask}，关则原样返回。
+     * 注意 facility {@code LogUtil} 写入前另有全局脱敏（默认开），故关闭本层后的可观察效果仍取决于
+     * {@code LogUtil} 全局设置（见 {@link OpenAiLogSettings#maskContent()}）。
+     */
+    private String maskIfEnabled(String content) {
+        return logSettings.maskContent() ? MaskUtil.mask(content) : content;
     }
 
     /**
