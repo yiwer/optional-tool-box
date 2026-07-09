@@ -92,6 +92,15 @@ public final class LocalFsObjectStore implements ObjectStore {
         });
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>返回序披露</b>（终审 Minor，P2 补注）：底层用 {@link Files#walk} 遍历，返回序即
+     * 文件系统目录遍历序——<b>既非字典序也非跨平台稳定序</b>；{@code maxKeys} 截断的是该
+     * 遍历序下的前 N 条。需要字典序请在调用方对结果排序（既有单测
+     * {@code listReturnsOnlyKeysWithMatchingPrefix} 以 containsExactlyInAnyOrder 断言，
+     * 即为此无序契约）。</p>
+     */
     @Override
     public Result<List<ObjectKey>, StorageError> list(String prefix, int maxKeys) {
         String normalizedPrefix = prefix == null ? "" : prefix;

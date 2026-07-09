@@ -37,6 +37,10 @@ public interface ObjectStore {
     /**
      * 按前缀列出对象，语义为"key 以 prefix 开头"（非目录语义，无 prefix 内的分隔符收敛）；
      * {@code maxKeys} 限制单次返回条数，不做自动翻页。
+     *
+     * <p><b>返回顺序未定义</b>：由各 adapter 的底层遍历/服务端行为决定（云端多为字典序，
+     * local 为文件系统遍历序），调用方不得依赖任何特定排序；需要有序结果请自行排序。
+     * {@code maxKeys} 截断作用于该未定义顺序——不保证是字典序意义上的"前 N 个"。</p>
      */
     Result<List<ObjectKey>, StorageError> list(String prefix, int maxKeys);
 
