@@ -38,9 +38,13 @@
             <artifactId>spring-core</artifactId>
         </dependency>
         <!-- toolboxStorageMessageSource 使用 ResourceBundleMessageSource（位于 spring-context，
-             其父类实现 spring-beans 的 BeanClassLoaderAware），此前 spring-beans 仅在 test 作用域
-             声明（GenericApplicationContext/BeanDefinition 断言用），编译期直接引用需 compile 作用域
-             （同 compare-enhancement 教训，见其 pom 同名依赖注释）。 -->
+             该类自身 implements spring-beans 的 BeanClassLoaderAware——其父类
+             AbstractResourceBasedMessageSource 并不实现），javac 编译 main 源码时需要该接口的
+             类文件完成继承链解析，故须 compile 作用域；此前 spring-beans 仅在 test 作用域声明
+             （GenericApplicationContext/BeanDefinition 断言用）。注意与 compare-enhancement 的
+             spring-beans 因果不同源：compare 是 main 字节码直接引用其类型（ObjectProvider），
+             analyze 可见、无需抑制；本模块 main 字节码零直接引用、仅编译期继承链解析需要，
+             故还需下方 ignoredNonTestScopedDependencies 抑制项。 -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-beans</artifactId>
@@ -177,10 +181,13 @@
                             </ignoredUnusedDeclaredDependencies>
                             <ignoredNonTestScopedDependencies>
                                 <!-- spring-beans：toolboxStorageMessageSource 使用的 ResourceBundleMessageSource
-                                     （spring-context）其父类实现 spring-beans 的 BeanClassLoaderAware，javac 编译
-                                     main 源码时需要该接口的类文件完成继承链解析，故须 compile 作用域；但 main
-                                     字节码从不直接引用 spring-beans 的类型（仅测试类 GenericApplicationContext/
-                                     BeanDefinition 直接引用），bytecode 扫描据此误判"仅测试使用却非 test 作用域"。 -->
+                                     （spring-context）自身 implements spring-beans 的 BeanClassLoaderAware（其父类
+                                     AbstractResourceBasedMessageSource 不实现），javac 编译 main 源码时需要该接口
+                                     的类文件完成继承链解析，故须 compile 作用域；但 main 字节码从不直接引用
+                                     spring-beans 的类型（仅测试类 GenericApplicationContext/BeanDefinition 直接
+                                     引用），bytecode 扫描据此误判"仅测试使用却非 test 作用域"——这正是与
+                                     compare-enhancement 的差别：compare 的 main 字节码直接引用 ObjectProvider，
+                                     analyze 天然可见，无需本抑制项。 -->
                                 <ignoredNonTestScopedDependency>org.springframework:spring-beans</ignoredNonTestScopedDependency>
                             </ignoredNonTestScopedDependencies>
                         </configuration>
