@@ -1,11 +1,16 @@
 package cn.code91.toolbox.compare.engine;
 
 import cn.code91.facility.context.SpringContextHolder;
+import cn.code91.facility.result.Result;
+import cn.code91.toolbox.compare.core.CompareError;
 import cn.code91.toolbox.compare.core.DiffResult;
 import cn.code91.toolbox.compare.spi.CompareHandlerRegistry;
 import cn.code91.toolbox.compare.testfixtures.OrderBean;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,17 +41,24 @@ import static org.assertj.core.api.Assertions.assertThat;
  * （也没有其他 compare-enhancement 测试类触达 {@code SpringContextHolder}，
  * 先到先得的单次注入是安全的）。{@link LocaleContextHolder} 是 ThreadLocal，
  * 用 {@code @AfterEach} 复位，避免影响同一线程后续用例。
+ *
+ * <p>另含停机竞态加固回归（@Order 末位）：关闭本类注入的上下文后验证标签解析回退——
+ * close 后其余 compare 测试不受影响（仅本类断言标签值，其余测试只断言 path/text）。
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class LabelLocaleRegressionTest {
 
     private static final ReflectionDiffEngine ENGINE = new ReflectionDiffEngine(CompareHandlerRegistry.withBuiltins());
+
+    /** 静态注入的真实上下文；@Order 末位用例会将其 close 以复现停机竞态（见类 Javadoc 追注）。 */
+    private static final AnnotationConfigApplicationContext CONTEXT;
 
     static {
         // 与生产 ToolboxCompareAutoConfiguration#toolboxCompareMessageSource 同构（除 basename
         // 指向测试专用 bundle 外）的真实 MessageSource，经由 SpringContextHolder 暴露给
         // LocaleUtil（其内部即经此单例查找）。
-        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(MessageSourceConfig.class);
-        SpringContextHolder.setApplicationContextManually(context);
+        CONTEXT = new AnnotationConfigApplicationContext(MessageSourceConfig.class);
+        SpringContextHolder.setApplicationContextManually(CONTEXT);
     }
 
     @AfterEach
@@ -55,6 +67,7 @@ class LabelLocaleRegressionTest {
     }
 
     @Test
+    @Order(1)
     void sameFieldLabelReflectsCurrentLocalePerDiffCallNotFirstCallerLocale() {
         OrderBean beforeZh = new OrderBean();
         beforeZh.setAmount(new BigDecimal("100.00"));
@@ -81,6 +94,33 @@ class LabelLocaleRegressionTest {
                 .as("同一 JVM、同一引擎实例，切换到英文 locale 后再次 diff，"
                         + "amount 字段标签应解析为英文——而非被类级缓存冻结为第一次的中文")
                 .isEqualTo("Order Amount");
+    }
+
+    /**
+     * 停机竞态加固（M0/M1 终审 P2 候选）：SpringContextHolder 持有的上下文关闭后，
+     * messageKey 解析不得让运行时异常穿透 diff()——应退回 @CompareLabel 注解回退文本。
+     * 用英文 locale 断言：正常路径解析出 "Order Amount"，回退路径是注解 value "订单金额"，
+     * 两者可区分（中文 locale 下解析结果与回退文本同为"订单金额"，无鉴别力）。
+     * 本用例必须最后执行（@Order(2)）——close 不可逆，SpringContextHolder 无法 reset。
+     */
+    @Test
+    @Order(2)
+    void labelResolutionFallsBackInsteadOfThrowingWhenContextClosed() {
+        CONTEXT.close();
+
+        OrderBean before = new OrderBean();
+        before.setAmount(new BigDecimal("100.00"));
+        OrderBean after = new OrderBean();
+        after.setAmount(new BigDecimal("200.00"));
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        Result<DiffResult, CompareError> result = ENGINE.diff(before, after);
+
+        assertThat(result.isOk())
+                .as("MessageSource 上下文已关闭时 diff 不得异常穿透，应正常返回 Ok").isTrue();
+        assertThat(labelOf(result.get(), "amount"))
+                .as("messageKey 解析失败应退回 @CompareLabel 注解回退文本（而非英文解析结果）")
+                .isEqualTo("订单金额");
     }
 
     private static String labelOf(DiffResult result, String fieldName) {
