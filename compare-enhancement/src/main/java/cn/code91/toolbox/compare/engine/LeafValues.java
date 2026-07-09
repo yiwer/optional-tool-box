@@ -65,7 +65,9 @@ final class LeafValues {
     /**
      * 判定两个叶子值是否相等：{@link BigDecimal} 用 {@code compareTo} 规避 scale 陷阱（1.0 与 1.00 相等）；
      * 其余类型用 {@code equals}（{@code Date}/{@code UUID} 的 equals 均为值语义；{@code Timestamp}
-     * 对 {@code Date} 的非对称 equals 不可达——类型对检查要求两侧运行时类相同）。
+     * 对 {@code Date} 的非对称 equals 不可达——类型对检查要求两侧运行时类相同，枚举除外
+     * （见 {@code ReflectionDiffEngine#isComparableTypePair} 的 Enum 分支；但
+     * {@code Timestamp}/{@code Date} 均非枚举，结论在此语境仍成立）。
      */
     static boolean equalsLeaf(Object a, Object b) {
         if (a instanceof BigDecimal bd1 && b instanceof BigDecimal bd2) {

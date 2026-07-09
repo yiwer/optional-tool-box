@@ -37,8 +37,16 @@ public record DiffOptions(int maxDepth, boolean nullAsEmpty, Set<String> include
      * include 前缀的祖先</b>时放行——祖先放行仅为允许引擎逐层下钻到目标深路径（include
      * {@code "a.b"} 时顶层字段 {@code a} 必须先放行才可能到达 {@code a.b}）。已知语义边界：
      * 若祖先字段本身是叶子值（或配有 {@code @CompareWith}/类型级比较器），它会被整体比较并
-     * 可能产出自身的变更记录——include 深路径的本意是对象图下钻，对叶子祖先不适用。
-     * exclude 无祖先语义：exclude {@code "a.b"} 只排除 {@code a.b} 及其后代，不影响
+     * 可能产出自身的变更记录——include 深路径的本意是对象图下钻，对叶子祖先不适用。</p>
+     *
+     * <p>另一已知边界：include/exclude 过滤在引擎的字段边界（compareField）逐字段咨询本方法——
+     * 结构体元素的内部字段带完整路径重新经过该门（include {@code "items[0]"} 时
+     * {@code items[1].price} 的变更会被正确过滤），但两类元素级变更记录不经过滤：
+     * <b>叶子类型的集合/Map 元素</b>（元素直接比较产出，不经字段门），以及<b>长度/键集
+     * 不匹配产生的 ADDED/REMOVED 元素</b>。include 深路径穿越集合时，这两类兄弟元素的
+     * 变更仍会产出；元素级过滤留待后续独立裁定。</p>
+     *
+     * <p>exclude 无祖先语义：exclude {@code "a.b"} 只排除 {@code a.b} 及其后代，不影响
      * {@code a} 与 {@code a.c}。</p>
      */
     public boolean isPathIncluded(String path) {

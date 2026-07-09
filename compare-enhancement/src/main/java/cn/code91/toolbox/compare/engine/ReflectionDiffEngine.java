@@ -86,16 +86,17 @@ public final class ReflectionDiffEngine implements DiffEngine {
         /**
          * 比较 path 位置的一对新旧值，追加变更到 changes。
          *
+         * <p>{@code nullAsEmpty} 归一在本方法入口统一套用（P2 下沉）：字段层、List/数组元素、
+         * Map value、顶层实参语义一致；{@code @CompareWith} 字段分支不经过本方法，
+         * 由 {@link #compareField} 单独归一。</p>
+         *
          * @param path          当前字段路径（顶层为空串）
          * @param labelSupplier 展示标签的惰性求值（顶层为 null，不产出顶层自身的 FieldChange）；
          *                      仅在实际产出 FieldChange 时才会被调用（I1 修复：{@code @CompareLabel}
          *                      的 messageKey 解析依赖调用时 locale，不应对递归展开、未变更的字段
          *                      也重复解析）
-         * <p>{@code nullAsEmpty} 归一在本方法入口统一套用（P2 下沉）：字段层、List/数组元素、
-         * Map value、顶层实参语义一致；{@code @CompareWith} 字段分支不经过本方法，
-         * 由 {@link #compareField} 单独归一。</p>
-         * @param oldValue      旧值
-         * @param newValue      新值
+         * @param oldValueRaw   旧值（入口归一前的原始值）
+         * @param newValueRaw   新值（入口归一前的原始值）
          * @param depth         当前递归深度（顶层对象为 0）
          */
         void compare(String path, Supplier<String> labelSupplier, Object oldValueRaw, Object newValueRaw, int depth, List<FieldChange> changes) {
