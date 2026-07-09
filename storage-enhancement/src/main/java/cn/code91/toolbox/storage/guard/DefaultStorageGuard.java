@@ -22,7 +22,8 @@ import java.io.InputStream;
  * {@code new Tika()}，若消费方未引入 optional 的 {@code tika-core}，类加载会抛
  * {@code NoClassDefFoundError}（{@code Error} 而非 {@code Exception}，且 facility 侧
  * 无任何降级探测——不同于同仓库 {@code ExcelUtil} 的双类探测范式）。本类因此在真正调用
- * {@code MimeTyping} 之前先做一次惰性、缓存的 classpath 探测（同一范式），
+ * {@code MimeTyping} 之前先做一次惰性、缓存的<b>实例级</b> classpath 探测（P2 retrofit 为 mail
+ * {@code DefaultAttachmentGuard} 的构造注入 probeClassLoader 范式），
  * {@code verify-mime=true} 但 Tika 不可用时，选择<b>拒绝该次上传</b>（{@code Err(ValidationError)}，
  * 消息提示补齐 {@code tika-core} 依赖）而非静默跳过嗅探——静默放行等于把用户显式打开的安全开关
  * 悄悄关掉，违背"不静默降级"（00-overview.md §2 原则 7）。</p>
@@ -44,16 +45,31 @@ public final class DefaultStorageGuard implements StorageGuard {
      */
     private static final int SNIFF_HEAD_LIMIT = 8192;
 
-    /**
-     * 惰性单次探测结果缓存；{@code volatile} 保证跨线程可见，无需额外同步
-     * （竞态下重复探测同一个只读判定，代价可忽略，同 ADR-0021 范式）。
-     */
-    private static volatile Boolean tikaPresentCache;
-
     private final GuardConfig config;
+    private final ClassLoader probeClassLoader;
 
+    /**
+     * 惰性单次探测结果缓存；<b>实例级</b>（P2 retrofit，同 mail {@code DefaultAttachmentGuard}
+     * 范式）+ {@code volatile} 保证跨线程可见，无需额外同步（竞态下重复探测同一个只读判定，
+     * 代价可忽略，同 ADR-0021 范式）。实例级使测试可用 {@code FilteredClassLoader} 真实演练
+     * 缺 tika 分支，无需静态 override 钩子与复位纪律。
+     */
+    private volatile Boolean tikaPresentCache;
+
+    /** 便捷构造：探测 ClassLoader 回退本类加载器（直接 new 使用的场景）。 */
     public DefaultStorageGuard(GuardConfig config) {
+        this(config, DefaultStorageGuard.class.getClassLoader());
+    }
+
+    /**
+     * @param probeClassLoader Tika classpath 探测所用 ClassLoader；装配层传容器侧
+     *                         ClassLoader（{@code ResourceLoader#getClassLoader()}），使
+     *                         {@code FilteredClassLoader} 条件测试对"缺 tika-core"分支
+     *                         真实生效（同 mail 裁定 E 范式）。
+     */
+    public DefaultStorageGuard(GuardConfig config, ClassLoader probeClassLoader) {
         this.config = config;
+        this.probeClassLoader = probeClassLoader;
     }
 
     @Override
@@ -142,38 +158,22 @@ public final class DefaultStorageGuard implements StorageGuard {
 
     /**
      * 惰性、缓存的 Tika 可用性探测（{@code initialize=false} 不触发类初始化，
-     * 仅验证类可解析），同 {@code ExcelUtil}/ADR-0021 范式。
+     * 仅验证类可解析），经构造注入的 {@link #probeClassLoader} 探测（P2 retrofit，
+     * 同 mail {@code DefaultAttachmentGuard#isTikaPresent} 范式）。
      */
-    private static boolean isTikaPresent() {
+    private boolean isTikaPresent() {
         Boolean cached = tikaPresentCache;
         if (cached != null) {
             return cached;
         }
         boolean present;
         try {
-            Class.forName(TIKA_PROBE_CLASS, false, DefaultStorageGuard.class.getClassLoader());
+            Class.forName(TIKA_PROBE_CLASS, false, probeClassLoader);
             present = true;
         } catch (ClassNotFoundException e) {
             present = false;
         }
         tikaPresentCache = present;
         return present;
-    }
-
-    /**
-     * 测试专用：强制探测缓存结果，模拟"classpath 缺 tika-core"分支而无需真的从测试
-     * classpath 移除该依赖（同 {@code ExcelUtil} 的 {@code overridePoiPresent} 范式，
-     * 见 server-facility ADR-0021）。测试须在 {@code @AfterEach} 中调用
-     * {@link #resetTikaPresentCache()} 复原，避免污染后续测试。
-     */
-    static void overrideTikaPresent(boolean present) {
-        tikaPresentCache = present;
-    }
-
-    /**
-     * 复原探测缓存至"未探测"状态，令下一次调用重新走真实探测。
-     */
-    static void resetTikaPresentCache() {
-        tikaPresentCache = null;
     }
 }

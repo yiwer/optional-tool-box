@@ -3,8 +3,8 @@ package cn.code91.toolbox.storage.guard;
 import cn.code91.facility.result.Result;
 import cn.code91.toolbox.storage.core.StorageError;
 import cn.code91.toolbox.storage.core.ValidationError;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.FilteredClassLoader;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -27,12 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DefaultStorageGuardTest {
 
     private static final GuardConfig DEFAULT_CONFIG = new GuardConfig(1024 * 1024, Set.of(), false);
-
-    @AfterEach
-    void resetTikaProbeCache() {
-        // 毒化纪律：任何测试改动过探测缓存后必须复原，避免影响其余测试的真实探测路径。
-        DefaultStorageGuard.resetTikaPresentCache();
-    }
 
     @Test
     void rejectsPathTraversalFilename() {
@@ -243,11 +237,11 @@ class DefaultStorageGuardTest {
 
     @Test
     void verifyMimeTrueRejectsWithGuidanceWhenTikaAbsentFromClasspath() {
-        // 模拟消费方未引入 optional 的 tika-core：DefaultStorageGuard 必须显式拒绝该次上传
-        // 并在消息中给出依赖引导，而不是静默跳过嗅探放行（00-overview.md §2 原则 7：不静默降级）。
-        DefaultStorageGuard.overrideTikaPresent(false);
+        // FilteredClassLoader 屏蔽 org.apache.tika 包：探测走真实 Class.forName 失败分支
+        // （P2 retrofit：不再用静态 override 钩子，同 mail DefaultAttachmentGuardTest 范式；
+        //  00-overview.md §2 原则 7：verify-mime=true 而 Tika 缺失时拒绝并给引导，不静默降级）。
         GuardConfig config = new GuardConfig(1024 * 1024, Set.of(), true);
-        DefaultStorageGuard guard = new DefaultStorageGuard(config);
+        DefaultStorageGuard guard = new DefaultStorageGuard(config, new FilteredClassLoader("org.apache.tika"));
         UploadCandidate candidate = candidateWith("photo.jpg", "image/jpeg", 10);
 
         Result<Void, StorageError> result = guard.check(candidate);
@@ -255,6 +249,18 @@ class DefaultStorageGuardTest {
         assertThat(result.isErr()).isTrue();
         assertThat(result.getErr()).isInstanceOf(ValidationError.class);
         assertThat(result.getErr().message()).contains("tika-core");
+    }
+
+    @Test
+    void verifyMimeFalseSucceedsEvenWhenTikaAbsent() {
+        // verify-mime=false 时完全不探测：缺 tika 也放行（同 mail verifyMimeFalseNeverProbesTika 范式）。
+        GuardConfig config = new GuardConfig(1024 * 1024, Set.of(), false);
+        DefaultStorageGuard guard = new DefaultStorageGuard(config, new FilteredClassLoader("org.apache.tika"));
+        UploadCandidate candidate = candidateWith("notes.txt", "text/plain", 10);
+
+        Result<Void, StorageError> result = guard.check(candidate);
+
+        assertThat(result.isOk()).isTrue();
     }
 
     private static UploadCandidate candidateWith(String filename, String contentType, long size) {

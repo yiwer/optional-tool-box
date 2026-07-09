@@ -24,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ResourceLoader;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -46,12 +47,18 @@ public class ToolboxStorageAutoConfiguration {
         return new DefaultObjectStoreRegistry(Map.of(), null);
     }
 
+    /**
+     * 探测 Tika 所用 ClassLoader 取容器侧（{@code ResourceLoader#getClassLoader()}），使
+     * {@code FilteredClassLoader} 条件测试对"缺 tika-core"分支真实生效（P2 retrofit，
+     * 同 mail {@code ToolboxMailAutoConfiguration#toolboxMailAttachmentGuard} 先例）。
+     */
     @Bean
     @ConditionalOnMissingBean
-    public StorageGuard toolboxStorageGuard(ToolboxStorageProperties properties) {
+    public StorageGuard toolboxStorageGuard(ToolboxStorageProperties properties, ResourceLoader resourceLoader) {
         ToolboxStorageProperties.Guard guard = properties.guard();
         long maxSize = guard.maxSize() == null ? 0L : guard.maxSize().toBytes();
-        return new DefaultStorageGuard(new GuardConfig(maxSize, guard.blockedExtensions(), guard.verifyMime()));
+        return new DefaultStorageGuard(new GuardConfig(maxSize, guard.blockedExtensions(), guard.verifyMime()),
+                resourceLoader.getClassLoader());
     }
 
     /**
