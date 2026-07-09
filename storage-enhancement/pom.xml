@@ -37,6 +37,14 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-core</artifactId>
         </dependency>
+        <!-- toolboxStorageMessageSource 使用 ResourceBundleMessageSource（位于 spring-context，
+             其父类实现 spring-beans 的 BeanClassLoaderAware），此前 spring-beans 仅在 test 作用域
+             声明（GenericApplicationContext/BeanDefinition 断言用），编译期直接引用需 compile 作用域
+             （同 compare-enhancement 教训，见其 pom 同名依赖注释）。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+        </dependency>
 
         <!-- 两个云 SDK：optional=true，消费方按所选 provider 自行引入（版本仍由父 pom BOM 管理） -->
         <dependency>
@@ -99,13 +107,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- ToolboxStorageAutoConfigurationTest（I3 回归）直接使用 GenericApplicationContext/
-             BeanDefinition（位于 spring-beans）断言销毁方法接线，此前仅靠 spring-context 传递引入。 -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-beans</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -174,6 +175,14 @@
                                      的必然结果而非误声明，保留该依赖声明本身是为了让消费方看到 optional 依赖矩阵。 -->
                                 <ignoredUnusedDeclaredDependency>org.apache.tika:tika-core</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
+                            <ignoredNonTestScopedDependencies>
+                                <!-- spring-beans：toolboxStorageMessageSource 使用的 ResourceBundleMessageSource
+                                     （spring-context）其父类实现 spring-beans 的 BeanClassLoaderAware，javac 编译
+                                     main 源码时需要该接口的类文件完成继承链解析，故须 compile 作用域；但 main
+                                     字节码从不直接引用 spring-beans 的类型（仅测试类 GenericApplicationContext/
+                                     BeanDefinition 直接引用），bytecode 扫描据此误判"仅测试使用却非 test 作用域"。 -->
+                                <ignoredNonTestScopedDependency>org.springframework:spring-beans</ignoredNonTestScopedDependency>
+                            </ignoredNonTestScopedDependencies>
                         </configuration>
                     </execution>
                 </executions>

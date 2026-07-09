@@ -267,6 +267,12 @@ class ToolboxStorageAutoConfigurationTest {
         });
     }
 
+    @Test
+    void messageSourceBeanRegisteredPerOverviewConvention() {
+        // 00-overview §4.1：模块注册自有 MessageSource 参与 facility AggregatedMessageSource 聚合（P2 补齐）。
+        contextRunner.run(context -> assertThat(context).hasBean("toolboxStorageMessageSource"));
+    }
+
     @Configuration
     static class CustomRegistryConfig {
         @Bean

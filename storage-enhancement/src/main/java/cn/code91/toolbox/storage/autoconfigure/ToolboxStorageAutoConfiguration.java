@@ -24,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.io.ResourceLoader;
 
 import java.nio.file.Path;
@@ -59,6 +60,23 @@ public class ToolboxStorageAutoConfiguration {
         long maxSize = guard.maxSize() == null ? 0L : guard.maxSize().toBytes();
         return new DefaultStorageGuard(new GuardConfig(maxSize, guard.blockedExtensions(), guard.verifyMime()),
                 resourceLoader.getClassLoader());
+    }
+
+    /**
+     * 模块 i18n（00-overview §4.1 约定补齐，P2）：注册模块自有 MessageSource 参与 facility
+     * {@code AggregatedMessageSource}（{@code @Primary}）聚合。bundle 当前无模块自有键
+     * （错误消息暂为硬编码中文，迁移属后续独立决策），先落基础设施与
+     * {@code toolbox.storage.} 键前缀纪律（同 compare {@code toolboxCompareMessageSource} 样板）。
+     */
+    @Bean("toolboxStorageMessageSource")
+    @ConditionalOnMissingBean(name = "toolboxStorageMessageSource")
+    public ResourceBundleMessageSource toolboxStorageMessageSource() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasename("i18n/toolbox-storage-messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        messageSource.setUseCodeAsDefaultMessage(false);
+        messageSource.setFallbackToSystemLocale(false);
+        return messageSource;
     }
 
     /**
