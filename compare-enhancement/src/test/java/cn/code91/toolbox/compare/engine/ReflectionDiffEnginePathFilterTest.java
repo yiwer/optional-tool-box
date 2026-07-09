@@ -65,4 +65,22 @@ class ReflectionDiffEnginePathFilterTest {
                 .as("include 深路径应下钻命中 address.city；amount 与 address 下的兄弟字段均不产出")
                 .containsExactly("address.city");
     }
+
+    @Test
+    void leafAncestorOfDeepIncludeIsComparedWholesale() {
+        // 钉住 DiffOptions#isPathIncluded Javadoc 披露的语义边界:include 深路径的祖先若本身
+        // 是叶子字段,会被整体比较并产出自身的变更记录(include 深路径的本意是对象图下钻,
+        // 对叶子祖先不适用)。若未来重构改变此行为,本测试将其暴露为显式决策而非静默漂移。
+        OrderBean before = new OrderBean();
+        before.setRemark("旧备注");
+        OrderBean after = new OrderBean();
+        after.setRemark("新备注");
+
+        DiffOptions options = new DiffOptions(8, false, Set.of("remark.x"), Set.of());
+        DiffResult result = engine.diff(before, after, options).get();
+
+        assertThat(result.changes()).extracting("path")
+                .as("叶子祖先 remark 被整体比较——文档化边界的回归钉")
+                .containsExactly("remark");
+    }
 }
