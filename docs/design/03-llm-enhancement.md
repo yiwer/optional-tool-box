@@ -47,12 +47,16 @@
 | `MaskUtil` | 请求/响应日志脱敏（默认开） |
 | `RateLimiterUtil` | 模型级客户端 QPS 护栏（厂商侧 429 前先自控） |
 | `JsonUtil` | 结构化输出解析（CANONICAL 命名空间） |
-| `Async<T>` / 虚拟线程 | `chatAsync` |
+| `Async<T>` / 虚拟线程 | `chatAsync`（P2——裁定 A 剔除出 P1，见 §4.1 实施注） |
 | `Result<T,E>` | 全部 API 返回值 |
 
 ## 4. 核心抽象设计
 
 ### 4.1 Seam 接口与值对象（`core`）
+
+> **P1 实施注（2026-07-08 补记）**：下方接口所列 `chatStream` 与 `StreamListener` 已被 M4 实施
+> 计划**裁定 A**（`docs/plans/2026-07-07-m4-llm.md`）从 P1 剔除——P1 落地的 `LlmClient` 仅含
+> `chat` 与 `chatStructured`，代码中无任何流式/异步死桩。流式与 `chatAsync` 见 §10 P2 行。
 
 ```java
 public interface LlmClient {
