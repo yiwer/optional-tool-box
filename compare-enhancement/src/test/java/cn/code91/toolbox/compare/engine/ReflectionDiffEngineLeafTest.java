@@ -4,10 +4,12 @@ import cn.code91.facility.result.Result;
 import cn.code91.toolbox.compare.core.ChangeKind;
 import cn.code91.toolbox.compare.core.CompareError;
 import cn.code91.toolbox.compare.core.DiffResult;
+import cn.code91.toolbox.compare.core.TypeMismatch;
 import cn.code91.toolbox.compare.spi.CompareHandlerRegistry;
 import cn.code91.toolbox.compare.testfixtures.DateFieldBean;
 import cn.code91.toolbox.compare.testfixtures.OrderBean;
 import cn.code91.toolbox.compare.testfixtures.OrderStatus;
+import cn.code91.toolbox.compare.testfixtures.PaymentStage;
 import cn.code91.toolbox.compare.testfixtures.UuidFieldBean;
 import org.junit.jupiter.api.Test;
 
@@ -212,6 +214,36 @@ class ReflectionDiffEngineLeafTest {
         assertThat(change.path()).isEqualTo("id");
         assertThat(change.oldText()).isEqualTo("11111111-1111-1111-1111-111111111111");
         assertThat(change.newText()).isEqualTo("22222222-2222-2222-2222-222222222222");
+    }
+
+    @Test
+    void enumConstantsWithBodiesCompareAsLeafByName() {
+        Result<DiffResult, CompareError> result = engine.diff(PaymentStage.AUTHORIZED, PaymentStage.CAPTURED);
+
+        assertThat(result.isOk())
+                .as("带方法体枚举常量（运行时类 PaymentStage$1/$2）不应被误判为 TypeMismatch")
+                .isTrue();
+        assertThat(result.get().changes()).hasSize(1);
+        var change = result.get().changes().get(0);
+        assertThat(change.kind()).isEqualTo(ChangeKind.MODIFIED);
+        assertThat(change.oldText()).as("展示文本取 name() 而非被覆写的 toString()").isEqualTo("AUTHORIZED");
+        assertThat(change.newText()).isEqualTo("CAPTURED");
+    }
+
+    @Test
+    void sameEnumConstantWithBodyIsIdentical() {
+        Result<DiffResult, CompareError> result = engine.diff(PaymentStage.AUTHORIZED, PaymentStage.AUTHORIZED);
+
+        assertThat(result.isOk()).isTrue();
+        assertThat(result.get().identical()).isTrue();
+    }
+
+    @Test
+    void differentEnumTypesRemainTypeMismatch() {
+        Result<DiffResult, CompareError> result = engine.diff((Object) OrderStatus.DRAFT, (Object) PaymentStage.AUTHORIZED);
+
+        assertThat(result.isErr()).as("不同声明枚举之间仍是类型不一致").isTrue();
+        assertThat(result.getErr()).isInstanceOf(TypeMismatch.class);
     }
 
     private static OrderBean baseOrder() {

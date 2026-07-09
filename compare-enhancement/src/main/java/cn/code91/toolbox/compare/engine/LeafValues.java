@@ -18,13 +18,15 @@ final class LeafValues {
     }
 
     /**
-     * 是否为叶子类型：基本类型/包装、String、枚举、日期时间（{@code TemporalAccessor} 与
-     * {@code java.util.Date} 含其 {@code java.sql} 子类，P2 扩表）、{@code UUID}（P2 扩表）、
-     * BigDecimal。数值类型统一视为叶子（不含 BigDecimal 以外的 Number 特殊判等逻辑，走 equals）。
+     * 是否为叶子类型：基本类型/包装、String、枚举（含带方法体常量的匿名子类——其
+     * {@code Class.isEnum()} 为 false，故用 {@code Enum} 可赋值性判定）、日期时间
+     * （{@code TemporalAccessor} 与 {@code java.util.Date} 含其 {@code java.sql} 子类，P2 扩表）、
+     * {@code UUID}（P2 扩表）、BigDecimal。数值类型统一视为叶子（不含 BigDecimal 以外的 Number
+     * 特殊判等逻辑，走 equals）。
      */
     static boolean isLeaf(Class<?> type) {
         return type.isPrimitive()
-                || type.isEnum()
+                || Enum.class.isAssignableFrom(type)
                 || CharSequence.class.isAssignableFrom(type)
                 || Number.class.isAssignableFrom(type)
                 || Boolean.class.isAssignableFrom(type)
@@ -43,6 +45,10 @@ final class LeafValues {
     static String toText(Object value, String datePattern) {
         if (value == null) {
             return null;
+        }
+        if (value instanceof Enum<?> enumValue) {
+            // 带方法体常量可能覆写 toString；展示文本固定取 name()，保证稳定可读。
+            return enumValue.name();
         }
         if (value instanceof TemporalAccessor temporal) {
             return DateUtil.format(temporal, datePattern).orElse(value.toString());

@@ -371,9 +371,22 @@ public final class ReflectionDiffEngine implements DiffEngine {
         if (oldType.equals(newType)) {
             return true;
         }
+        // 带方法体的枚举常量运行时类是合成匿名子类（E$1/E$2），不同常量类不同；
+        // 同一声明枚举下的常量互为可比较（P2：带方法体枚举）。
+        if (Enum.class.isAssignableFrom(oldType) && Enum.class.isAssignableFrom(newType)) {
+            return baseEnumClass(oldType).equals(baseEnumClass(newType));
+        }
         // 同为 List 或同为 Map 的不同实现类（如 ArrayList vs LinkedList）视为可比较。
         return (List.class.isAssignableFrom(oldType) && List.class.isAssignableFrom(newType))
                 || (Map.class.isAssignableFrom(oldType) && Map.class.isAssignableFrom(newType));
+    }
+
+    /**
+     * 枚举常量的声明枚举类：普通常量运行时类即声明类（isEnum()=true）；带方法体常量的
+     * 运行时类是匿名子类（isEnum()=false），其直接父类才是声明枚举类。
+     */
+    private static Class<?> baseEnumClass(Class<?> type) {
+        return type.isEnum() ? type : type.getSuperclass();
     }
 
     @SuppressWarnings("unchecked")
