@@ -56,4 +56,18 @@ class ToolboxLlmPropertiesTest {
         assertThat(rendered).contains("******");
         assertThat(rendered).contains("deepseek-chat");
     }
+
+    @Test
+    void modelToStringPrintsNullWhenApiKeyAbsent() {
+        // 对齐 mail SmtpConnectionConfig 范式：null 印 null（诊断时可区分"未配置"与"已配置被遮蔽"），
+        // 非 null 才遮蔽为 ******（cosmetic Minor，P2）。
+        ToolboxLlmProperties.Model model = new ToolboxLlmProperties.Model(
+                "openai-compatible", "https://api.deepseek.com/v1", null,
+                "deepseek-chat", null, null, null, null, null);
+
+        String rendered = model.toString();
+
+        assertThat(rendered).contains("apiKey=null");
+        assertThat(rendered).doesNotContain("******");
+    }
 }

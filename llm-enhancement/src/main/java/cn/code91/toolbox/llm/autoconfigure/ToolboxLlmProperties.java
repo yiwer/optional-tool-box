@@ -74,10 +74,13 @@ public record ToolboxLlmProperties(
         /**
          * 覆盖 record 默认 {@code toString()}（全局约束 12：api-key 绝不出现在
          * toString/日志/错误消息；配置绑定诊断/调试打印若不慎调用本方法，防止明文外泄）。
+         * null 时印 {@code null}（诊断时可区分"未配置"与"已配置被遮蔽"），非 null 才遮蔽——
+         * 同 mail {@code SmtpConnectionConfig} 范式（P2 cosmetic 对齐）。
          */
         @Override
         public String toString() {
-            return "Model[type=" + type + ", baseUrl=" + baseUrl + ", apiKey=******, model=" + model
+            return "Model[type=" + type + ", baseUrl=" + baseUrl
+                    + ", apiKey=" + (apiKey == null ? "null" : "******") + ", model=" + model
                     + ", temperature=" + temperature + ", maxTokens=" + maxTokens + ", timeout=" + timeout
                     + ", maxRetries=" + maxRetries + ", rateLimitQps=" + rateLimitQps + "]";
         }
