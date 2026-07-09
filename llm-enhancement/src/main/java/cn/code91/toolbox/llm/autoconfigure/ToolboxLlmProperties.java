@@ -59,11 +59,13 @@ public record ToolboxLlmProperties(
      * @param timeout       请求超时；未配置回退默认 60s
      * @param maxRetries    最大重试次数（裁定 C）；未配置回退默认 2
      * @param rateLimitQps  客户端限流每秒许可数，0=关闭（裁定 F）
+     * @param jsonMode      {@code chatStructured} 请求是否附带 {@code response_format} JSON mode
+     *                      提示（默认 false；仅部分兼容端点支持，per-model 开关，P2 接线）
      */
     public record Model(
             String type, String baseUrl, String apiKey, String model,
             Double temperature, Integer maxTokens, Duration timeout,
-            Integer maxRetries, Double rateLimitQps) {
+            Integer maxRetries, Double rateLimitQps, Boolean jsonMode) {
 
         public Model {
             if (type == null || type.isBlank()) {
@@ -82,7 +84,8 @@ public record ToolboxLlmProperties(
             return "Model[type=" + type + ", baseUrl=" + baseUrl
                     + ", apiKey=" + (apiKey == null ? "null" : "******") + ", model=" + model
                     + ", temperature=" + temperature + ", maxTokens=" + maxTokens + ", timeout=" + timeout
-                    + ", maxRetries=" + maxRetries + ", rateLimitQps=" + rateLimitQps + "]";
+                    + ", maxRetries=" + maxRetries + ", rateLimitQps=" + rateLimitQps
+                    + ", jsonMode=" + jsonMode + "]";
         }
     }
 }

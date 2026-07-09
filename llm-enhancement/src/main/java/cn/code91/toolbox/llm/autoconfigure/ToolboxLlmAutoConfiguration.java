@@ -75,7 +75,8 @@ public class ToolboxLlmAutoConfiguration {
                 name, model.baseUrl(), model.apiKey(), model.model(),
                 model.temperature(), model.maxTokens(), model.timeout(),
                 model.maxRetries() == null ? -1 : model.maxRetries(),
-                (Duration) null, model.rateLimitQps() == null ? 0 : model.rateLimitQps());
+                (Duration) null, model.rateLimitQps() == null ? 0 : model.rateLimitQps(),
+                Boolean.TRUE.equals(model.jsonMode()));
         return new OpenAiCompatibleClient(config, listeners, logSettings);
     }
 }

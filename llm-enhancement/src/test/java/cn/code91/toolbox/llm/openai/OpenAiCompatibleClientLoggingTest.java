@@ -77,7 +77,8 @@ class OpenAiCompatibleClientLoggingTest {
 
     private OpenAiCompatibleClient clientWith(OpenAiLogSettings logSettings) {
         OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "http://localhost:" + wireMock.port() + "/v1",
-                "sk-secret-key", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5), 0, Duration.ofMillis(10), 0);
+                "sk-secret-key", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5), 0, Duration.ofMillis(10), 0,
+                false);
         return new OpenAiCompatibleClient(config, List.of(), logSettings,
                 (key, permits, capacity, qps) -> null, duration -> { });
     }

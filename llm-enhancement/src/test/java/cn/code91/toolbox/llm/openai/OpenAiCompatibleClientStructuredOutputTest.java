@@ -13,8 +13,12 @@ import java.time.Duration;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
+import static com.github.tomakehurst.wiremock.client.WireMock.notMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -41,8 +45,12 @@ class OpenAiCompatibleClientStructuredOutputTest {
     }
 
     private OpenAiCompatibleClient clientOf() {
+        return clientOf(false);
+    }
+
+    private OpenAiCompatibleClient clientOf(boolean jsonMode) {
         OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "http://localhost:" + wireMock.port() + "/v1",
-                "sk-test", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5), 0, Duration.ofMillis(10), 0);
+                "sk-test", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5), 0, Duration.ofMillis(10), 0, jsonMode);
         return new OpenAiCompatibleClient(config, List.of(), (key, permits, capacity, qps) -> null, duration -> { });
     }
 
@@ -131,5 +139,37 @@ class OpenAiCompatibleClientStructuredOutputTest {
 
         assertThat(result.isErr()).isTrue();
         assertThat(result.getErr()).isInstanceOf(LlmError.AuthError.class);
+    }
+
+    @Test
+    void jsonModeOnAttachesResponseFormatOnStructuredCalls() {
+        stubModelReply("{\"category\":\"billing\",\"urgency\":\"high\"}");
+
+        clientOf(true).chatStructured(ChatRequest.user("x"), TicketInfo.class);
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(matching(".*\"response_format\"\\s*:\\s*\\{\\s*\"type\"\\s*:\\s*\"json_object\"\\s*\\}.*")));
+    }
+
+    @Test
+    void jsonModeOffOmitsResponseFormat() {
+        stubModelReply("{\"category\":\"billing\",\"urgency\":\"high\"}");
+
+        clientOf(false).chatStructured(ChatRequest.user("x"), TicketInfo.class);
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(notMatching(".*response_format.*")));
+    }
+
+    @Test
+    void jsonModeOnDoesNotAffectPlainChat() {
+        // json-mode 是 chatStructured 专属提示：普通 chat 即便模型开了 json-mode 也不附带
+        // （否则普通对话被强制 JSON 输出）。
+        stubModelReply("普通回答");
+
+        clientOf(true).chat(ChatRequest.user("x"));
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(notMatching(".*response_format.*")));
     }
 }

@@ -20,11 +20,14 @@ import java.time.Duration;
  * @param maxRetries       默认最大重试次数（裁定 C），请求级 {@code ChatOptions.maxRetries} 优先于此
  * @param retryBackoff     首次重试退避基值，指数倍增（裁定 C）
  * @param rateLimitQps     客户端限流每秒许可数，0 = 关闭（裁定 F）
+ * @param jsonMode         {@code chatStructured} 时是否附带 {@code response_format={"type":"json_object"}}
+ *                         （P2 接线；仅部分 OpenAI 兼容端点支持，故为 per-model 开关；剥壳解析
+ *                         无论开关与否保持鲁棒——裁定 B"可选附带"）
  */
 public record OpenAiModelConfig(
         String modelName, String baseUrl, String apiKey, String model,
         Double temperature, Integer maxTokens, Duration timeout,
-        int maxRetries, Duration retryBackoff, double rateLimitQps) {
+        int maxRetries, Duration retryBackoff, double rateLimitQps, boolean jsonMode) {
 
     public OpenAiModelConfig {
         if (modelName == null || modelName.isBlank()) {
@@ -65,6 +68,7 @@ public record OpenAiModelConfig(
         return "OpenAiModelConfig[modelName=" + modelName + ", baseUrl=" + baseUrl
                 + ", apiKey=******, model=" + model + ", temperature=" + temperature
                 + ", maxTokens=" + maxTokens + ", timeout=" + timeout + ", maxRetries=" + maxRetries
-                + ", retryBackoff=" + retryBackoff + ", rateLimitQps=" + rateLimitQps + "]";
+                + ", retryBackoff=" + retryBackoff + ", rateLimitQps=" + rateLimitQps
+                + ", jsonMode=" + jsonMode + "]";
     }
 }

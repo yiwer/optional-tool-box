@@ -121,6 +121,24 @@ public final class OpenAiCompatibleClient implements LlmClient {
 
     @Override
     public Result<ChatResponse, LlmError> chat(ChatRequest request) {
+        return doChat(request, false);
+    }
+
+    @Override
+    public <T> Result<T, LlmError> chatStructured(ChatRequest request, Class<T> targetType) {
+        Result<ChatResponse, LlmError> chatResult = doChat(request, config.jsonMode());
+        if (chatResult.isErr()) {
+            return Result.err(chatResult.getErr());
+        }
+        return parseStructured(chatResult.get().content(), targetType);
+    }
+
+    /**
+     * chat/chatStructured 共用的编排主干。{@code jsonMode=true}（仅 chatStructured 且模型
+     * 配置 {@code json-mode} 开启）时请求附带 {@code response_format={"type":"json_object"}}——
+     * 裁定 B"可选附带"：并非所有兼容端点支持该字段，剥壳解析无论如何保持鲁棒，不依赖它。
+     */
+    private Result<ChatResponse, LlmError> doChat(ChatRequest request, boolean jsonMode) {
         LlmError rateLimited = checkRateLimit();
         if (rateLimited != null) {
             return Result.err(rateLimited);
@@ -128,21 +146,12 @@ public final class OpenAiCompatibleClient implements LlmClient {
 
         logRequest(request);
         Instant start = Instant.now();
-        Result<ChatResponse, LlmError> result = sendWithRetry(request);
+        Result<ChatResponse, LlmError> result = sendWithRetry(request, jsonMode);
         if (result.isOk()) {
             logResponse(result.get());
             notifyUsageListeners(result.get().usage(), Duration.between(start, Instant.now()));
         }
         return result;
-    }
-
-    @Override
-    public <T> Result<T, LlmError> chatStructured(ChatRequest request, Class<T> targetType) {
-        Result<ChatResponse, LlmError> chatResult = chat(request);
-        if (chatResult.isErr()) {
-            return Result.err(chatResult.getErr());
-        }
-        return parseStructured(chatResult.get().content(), targetType);
     }
 
     /**
@@ -292,12 +301,12 @@ public final class OpenAiCompatibleClient implements LlmClient {
      * （第 n 次重试前等待 {@code retryAfter 或 backoff * 2^(n-1)}）；其余四型直返；
      * 退避期间被中断则恢复中断位并放弃剩余重试（携带最近一次错误返回）。
      */
-    private Result<ChatResponse, LlmError> sendWithRetry(ChatRequest request) {
+    private Result<ChatResponse, LlmError> sendWithRetry(ChatRequest request, boolean jsonMode) {
         int maxAttempts = resolveMaxRetries(request.options()) + 1;
         int attempt = 0;
         while (true) {
             attempt++;
-            Result<ChatResponse, LlmError> attemptResult = sendOnce(request);
+            Result<ChatResponse, LlmError> attemptResult = sendOnce(request, jsonMode);
             if (attemptResult.isOk()) {
                 return attemptResult;
             }
@@ -344,8 +353,8 @@ public final class OpenAiCompatibleClient implements LlmClient {
      * {@code RestClientException} 捕获；后者内统一顺因果链判定超时/连接异常
      * （见下方 catch 分支注释：故障未必以 {@link ResourceAccessException} 现身）。
      */
-    private Result<ChatResponse, LlmError> sendOnce(ChatRequest request) {
-        OpenAiChatCompletionRequest body = toProtocolRequest(request);
+    private Result<ChatResponse, LlmError> sendOnce(ChatRequest request, boolean jsonMode) {
+        OpenAiChatCompletionRequest body = toProtocolRequest(request, jsonMode);
         try {
             OpenAiChatCompletionResponse response = restClient.post()
                     .uri("/chat/completions")
@@ -404,14 +413,15 @@ public final class OpenAiCompatibleClient implements LlmClient {
         return null;
     }
 
-    private OpenAiChatCompletionRequest toProtocolRequest(ChatRequest request) {
+    private OpenAiChatCompletionRequest toProtocolRequest(ChatRequest request, boolean jsonMode) {
         List<OpenAiChatMessage> messages = request.messages().stream()
                 .map(m -> new OpenAiChatMessage(roleOf(m.role()), m.content()))
                 .toList();
         ChatOptions options = request.options();
         Double temperature = options.temperature() != null ? options.temperature() : config.temperature();
         Integer maxTokens = options.maxTokens() != null ? options.maxTokens() : config.maxTokens();
-        return new OpenAiChatCompletionRequest(config.model(), messages, temperature, maxTokens, null);
+        return new OpenAiChatCompletionRequest(config.model(), messages, temperature, maxTokens,
+                jsonMode ? OpenAiChatCompletionRequest.OpenAiResponseFormat.JSON_OBJECT : null);
     }
 
     private static String roleOf(cn.code91.toolbox.llm.core.Role role) {

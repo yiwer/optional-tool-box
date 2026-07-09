@@ -64,7 +64,7 @@ class OpenAiCompatibleClientMaskingTest {
     private OpenAiCompatibleClient clientOf() {
         OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "http://localhost:" + wireMock.port() + "/v1",
                 "sk-super-secret-api-key-12345", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5),
-                0, Duration.ofMillis(10), 0);
+                0, Duration.ofMillis(10), 0, false);
         return new OpenAiCompatibleClient(config, List.of(), (key, permits, capacity, qps) -> null, duration -> { });
     }
 

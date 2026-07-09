@@ -52,7 +52,7 @@ class OpenAiCompatibleClientTest {
     private OpenAiModelConfig configOf(int maxRetries) {
         return new OpenAiModelConfig("deepseek", "http://localhost:" + wireMock.port() + "/v1",
                 "sk-test-secret-key", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5),
-                maxRetries, Duration.ofMillis(10), 0);
+                maxRetries, Duration.ofMillis(10), 0, false);
     }
 
     /**
@@ -61,7 +61,7 @@ class OpenAiCompatibleClientTest {
     private OpenAiModelConfig configWithRateLimit(double qps) {
         return new OpenAiModelConfig("deepseek", "http://localhost:" + wireMock.port() + "/v1",
                 "sk-test-secret-key", "deepseek-chat", 0.2, 512, Duration.ofSeconds(5),
-                2, Duration.ofMillis(10), qps);
+                2, Duration.ofMillis(10), qps, false);
     }
 
     private OpenAiCompatibleClient clientOf(int maxRetries) {
@@ -182,7 +182,7 @@ class OpenAiCompatibleClientTest {
 
         OpenAiModelConfig fastTimeoutConfig = new OpenAiModelConfig("deepseek",
                 "http://localhost:" + wireMock.port() + "/v1", "sk-test", "deepseek-chat",
-                null, null, Duration.ofMillis(200), 1, Duration.ofMillis(10), 0);
+                null, null, Duration.ofMillis(200), 1, Duration.ofMillis(10), 0, false);
         OpenAiCompatibleClient client = new OpenAiCompatibleClient(
                 fastTimeoutConfig, List.of(), (key, permits, capacity, qps) -> null, duration -> { });
 

@@ -16,7 +16,7 @@ class OpenAiModelConfigTest {
     @Test
     void missingBaseUrlFailsFastWithConfigPathGuidance() {
         assertThatThrownBy(() -> new OpenAiModelConfig("deepseek", null, "sk-x", "deepseek-chat",
-                null, null, null, 2, null, 0))
+                null, null, null, 2, null, 0, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("deepseek")
                 .hasMessageContaining("toolbox.llm.models.deepseek.base-url");
@@ -25,7 +25,7 @@ class OpenAiModelConfigTest {
     @Test
     void blankBaseUrlFailsFast() {
         assertThatThrownBy(() -> new OpenAiModelConfig("deepseek", "  ", "sk-x", "deepseek-chat",
-                null, null, null, 2, null, 0))
+                null, null, null, 2, null, 0, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("base-url");
     }
@@ -33,7 +33,7 @@ class OpenAiModelConfigTest {
     @Test
     void missingApiKeyFailsFastWithConfigPathGuidance() {
         assertThatThrownBy(() -> new OpenAiModelConfig("deepseek", "https://api.deepseek.com/v1", null,
-                "deepseek-chat", null, null, null, 2, null, 0))
+                "deepseek-chat", null, null, null, 2, null, 0, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("toolbox.llm.models.deepseek.api-key");
     }
@@ -41,7 +41,7 @@ class OpenAiModelConfigTest {
     @Test
     void missingModelFailsFastWithConfigPathGuidance() {
         assertThatThrownBy(() -> new OpenAiModelConfig("deepseek", "https://api.deepseek.com/v1",
-                "sk-x", null, null, null, null, 2, null, 0))
+                "sk-x", null, null, null, null, 2, null, 0, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("toolbox.llm.models.deepseek.model");
     }
@@ -49,14 +49,14 @@ class OpenAiModelConfigTest {
     @Test
     void blankModelNameRejected() {
         assertThatThrownBy(() -> new OpenAiModelConfig("  ", "https://x/v1", "sk-x", "m",
-                null, null, null, 2, null, 0))
+                null, null, null, 2, null, 0, false))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void defaultsAppliedWhenTimeoutBackoffAndRetriesUnset() {
         OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "https://api.deepseek.com/v1",
-                "sk-x", "deepseek-chat", null, null, null, -1, null, 0);
+                "sk-x", "deepseek-chat", null, null, null, -1, null, 0, false);
 
         assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(60));
         assertThat(config.retryBackoff()).isEqualTo(Duration.ofMillis(500));
@@ -67,7 +67,7 @@ class OpenAiModelConfigTest {
     void toStringNeverExposesApiKey() {
         OpenAiModelConfig config = new OpenAiModelConfig("deepseek", "https://api.deepseek.com/v1",
                 "sk-super-secret-value", "deepseek-chat", 0.2, 512, Duration.ofSeconds(30), 2,
-                Duration.ofMillis(500), 5);
+                Duration.ofMillis(500), 5, false);
 
         String rendered = config.toString();
 

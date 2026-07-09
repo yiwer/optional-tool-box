@@ -173,6 +173,7 @@ toolbox:
         timeout: 60s
         max-retries: 2
         rate-limit-qps: 5                # facility RateLimiterUtil 客户端护栏，0=关闭
+        json-mode: false                 # chatStructured 附带 response_format JSON mode 提示（P2 接线；仅部分兼容端点支持）
       local-qwen:
         type: openai-compatible
         base-url: http://vllm.internal:8000/v1

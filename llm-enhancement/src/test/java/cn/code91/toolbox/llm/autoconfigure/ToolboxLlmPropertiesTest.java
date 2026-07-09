@@ -31,7 +31,7 @@ class ToolboxLlmPropertiesTest {
     @Test
     void modelTypeDefaultsToOpenAiCompatibleWhenBlank() {
         ToolboxLlmProperties.Model model = new ToolboxLlmProperties.Model(
-                "  ", "https://x/v1", "sk-x", "m", null, null, null, null, null);
+                "  ", "https://x/v1", "sk-x", "m", null, null, null, null, null, null);
 
         assertThat(model.type()).isEqualTo("openai-compatible");
     }
@@ -39,7 +39,7 @@ class ToolboxLlmPropertiesTest {
     @Test
     void modelTypeDefaultsToOpenAiCompatibleWhenNull() {
         ToolboxLlmProperties.Model model = new ToolboxLlmProperties.Model(
-                null, "https://x/v1", "sk-x", "m", null, null, null, null, null);
+                null, "https://x/v1", "sk-x", "m", null, null, null, null, null, null);
 
         assertThat(model.type()).isEqualTo("openai-compatible");
     }
@@ -48,7 +48,7 @@ class ToolboxLlmPropertiesTest {
     void modelToStringNeverExposesApiKey() {
         ToolboxLlmProperties.Model model = new ToolboxLlmProperties.Model(
                 "openai-compatible", "https://api.deepseek.com/v1", "sk-super-secret-value",
-                "deepseek-chat", 0.2, 512, Duration.ofSeconds(30), 2, 5.0);
+                "deepseek-chat", 0.2, 512, Duration.ofSeconds(30), 2, 5.0, null);
 
         String rendered = model.toString();
 
@@ -63,7 +63,7 @@ class ToolboxLlmPropertiesTest {
         // 非 null 才遮蔽为 ******（cosmetic Minor，P2）。
         ToolboxLlmProperties.Model model = new ToolboxLlmProperties.Model(
                 "openai-compatible", "https://api.deepseek.com/v1", null,
-                "deepseek-chat", null, null, null, null, null);
+                "deepseek-chat", null, null, null, null, null, null);
 
         String rendered = model.toString();
 
