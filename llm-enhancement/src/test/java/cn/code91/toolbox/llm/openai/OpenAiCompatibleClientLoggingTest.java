@@ -11,6 +11,7 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
@@ -32,6 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * logback-test.xml 把 {@code cn.code91.toolbox.llm} 全局调至 OFF 降噪，本测试临时抬回 INFO 并挂
  * 内存 appender 捕获事件断言（同 {@link OpenAiCompatibleClientMaskingTest} 先例）。
  */
+@Isolated("mutate facility LogUtil 进程级全局脱敏开关（setMaskingEnabled）：当前 surefire 顺序执行下"
+        + " @AfterEach 已复原、无害；若启用 JUnit 并行执行，本类必须独占运行避免全局态互相踩踏（P2 钉住）")
 class OpenAiCompatibleClientLoggingTest {
 
     private WireMockServer wireMock;
