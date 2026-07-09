@@ -91,11 +91,16 @@ public final class ReflectionDiffEngine implements DiffEngine {
          *                      仅在实际产出 FieldChange 时才会被调用（I1 修复：{@code @CompareLabel}
          *                      的 messageKey 解析依赖调用时 locale，不应对递归展开、未变更的字段
          *                      也重复解析）
+         * <p>{@code nullAsEmpty} 归一在本方法入口统一套用（P2 下沉）：字段层、List/数组元素、
+         * Map value、顶层实参语义一致；{@code @CompareWith} 字段分支不经过本方法，
+         * 由 {@link #compareField} 单独归一。</p>
          * @param oldValue      旧值
          * @param newValue      新值
          * @param depth         当前递归深度（顶层对象为 0）
          */
-        void compare(String path, Supplier<String> labelSupplier, Object oldValue, Object newValue, int depth, List<FieldChange> changes) {
+        void compare(String path, Supplier<String> labelSupplier, Object oldValueRaw, Object newValueRaw, int depth, List<FieldChange> changes) {
+            Object oldValue = normalizeNullAsEmpty(oldValueRaw);
+            Object newValue = normalizeNullAsEmpty(newValueRaw);
             if (oldValue == null && newValue == null) {
                 return;
             }
@@ -271,7 +276,7 @@ public final class ReflectionDiffEngine implements DiffEngine {
                 return;
             }
 
-            compare(path, field::resolveLabel, normalizeNullAsEmpty(oldFieldValue), normalizeNullAsEmpty(newFieldValue), depth + 1, changes);
+            compare(path, field::resolveLabel, oldFieldValue, newFieldValue, depth + 1, changes);
         }
 
         private Object readField(FieldMeta field, Object target, String path) {
@@ -283,7 +288,8 @@ public final class ReflectionDiffEngine implements DiffEngine {
         }
 
         /**
-         * {@code nullAsEmpty=true} 时把空串规整为 null，使 null 与 "" 在后续比较中视为相等
+         * {@code nullAsEmpty=true} 时把空串规整为 null，使 null 与 "" 在后续比较中视为相等。
+         * 在 {@link #compare} 入口统一套用（P2：此前仅字段层生效，集合/Map 元素层与顶层被绕过）
          * （两者都归一后要么同为 null 直接判等，要么其中一侧仍为具体值走 ADDED/REMOVED）。
          */
         private Object normalizeNullAsEmpty(Object value) {

@@ -1,6 +1,7 @@
 package cn.code91.toolbox.compare.engine;
 
 import cn.code91.facility.result.Result;
+import cn.code91.toolbox.compare.core.ChangeKind;
 import cn.code91.toolbox.compare.core.CompareError;
 import cn.code91.toolbox.compare.core.CycleDetected;
 import cn.code91.toolbox.compare.core.DepthExceeded;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -110,6 +112,43 @@ class ReflectionDiffEngineErrorTest {
         DiffResult result = engine.diff(before, after, options).get();
 
         assertThat(result.identical()).as("nullAsEmpty=true 时 null 与空串应视为相等").isTrue();
+    }
+
+    @Test
+    void nullAsEmptyTrueAppliesToListElements() {
+        List<String> before = Arrays.asList("a", null);
+        List<String> after = Arrays.asList("a", "");
+        DiffOptions options = new DiffOptions(8, true, Set.of(), Set.of());
+
+        DiffResult result = engine.diff(before, after, options).get();
+
+        assertThat(result.identical())
+                .as("nullAsEmpty=true 时集合元素层 null 与空串也应视为相等（P2 语义下沉）").isTrue();
+    }
+
+    @Test
+    void nullAsEmptyTrueAppliesToMapValues() {
+        Map<String, String> before = new HashMap<>();
+        before.put("note", null);
+        Map<String, String> after = new HashMap<>();
+        after.put("note", "");
+        DiffOptions options = new DiffOptions(8, true, Set.of(), Set.of());
+
+        DiffResult result = engine.diff(before, after, options).get();
+
+        assertThat(result.identical()).as("Map value 层同样生效").isTrue();
+    }
+
+    @Test
+    void nullAsEmptyFalseStillReportsListElementDifference() {
+        List<String> before = Arrays.asList("a", null);
+        List<String> after = Arrays.asList("a", "");
+
+        DiffResult result = engine.diff(before, after).get();
+
+        assertThat(result.changes()).extracting("path").containsExactly("[1]");
+        assertThat(result.changes().get(0).kind())
+                .as("默认（nullAsEmpty=false）行为钉住：null→\"\" 记 ADDED").isEqualTo(ChangeKind.ADDED);
     }
 
     @Test
