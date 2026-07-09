@@ -83,7 +83,7 @@ public sealed interface CompareError
 
 ### 4.3 对象图遍历规则（正确性硬约束）
 
-1. **叶子类型**直接比：基本类型/包装、String、枚举（渲染取 `@CompareLabel` 或 name）、日期时间（`DateUtil` 格式化）、`BigDecimal`（**`compareTo` 判等**，规避 scale 陷阱）。
+1. **叶子类型**直接比：基本类型/包装、String、枚举（渲染取 `@CompareLabel` 或 name）、日期时间（`TemporalAccessor` 与 `java.util.Date` 含 `java.sql` 子类，均 `DateUtil` 格式化；Date 为 P2 扩表）、`UUID`（P2 扩表）、`BigDecimal`（**`compareTo` 判等**，规避 scale 陷阱）。
 2. **嵌套对象**递归展开，路径用 `.` 连接；超过 `maxDepth` 返回 `DepthExceeded`。
 3. **环检测**：以 IdentityHashMap 记录当前递归栈上的对象，命中即返回 `CycleDetected`（错误而非死循环）。
 4. **集合三策略**：

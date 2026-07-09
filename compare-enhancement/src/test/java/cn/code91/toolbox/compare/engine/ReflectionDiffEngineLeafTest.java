@@ -5,8 +5,10 @@ import cn.code91.toolbox.compare.core.ChangeKind;
 import cn.code91.toolbox.compare.core.CompareError;
 import cn.code91.toolbox.compare.core.DiffResult;
 import cn.code91.toolbox.compare.spi.CompareHandlerRegistry;
+import cn.code91.toolbox.compare.testfixtures.DateFieldBean;
 import cn.code91.toolbox.compare.testfixtures.OrderBean;
 import cn.code91.toolbox.compare.testfixtures.OrderStatus;
+import cn.code91.toolbox.compare.testfixtures.UuidFieldBean;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -14,6 +16,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Date;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -159,6 +163,55 @@ class ReflectionDiffEngineLeafTest {
         assertThat(result.identical())
                 .as("@CompareWith(AlwaysEqualComparator) 应压制字段级差异，优先级最高")
                 .isTrue();
+    }
+
+    @Test
+    void dateFieldComparesAsLeaf() {
+        DateFieldBean before = new DateFieldBean();
+        before.setCreatedAt(new Date(1000L));
+        DateFieldBean after = new DateFieldBean();
+        after.setCreatedAt(new Date(2000L));
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after);
+
+        assertThat(result.isOk()).as("P2 扩表后 Date 是叶子类型，不再走对象图反射").isTrue();
+        assertThat(result.get().changes()).hasSize(1);
+        var change = result.get().changes().get(0);
+        assertThat(change.path()).isEqualTo("createdAt");
+        assertThat(change.kind()).isEqualTo(ChangeKind.MODIFIED);
+        assertThat(change.oldText())
+                .as("Date 展示文本应经 DateUtil 按 datePattern 渲染（yyyy-MM-dd HH:mm:ss）")
+                .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}");
+    }
+
+    @Test
+    void equalDatesProduceNoChanges() {
+        DateFieldBean before = new DateFieldBean();
+        before.setCreatedAt(new Date(1000L));
+        DateFieldBean after = new DateFieldBean();
+        after.setCreatedAt(new Date(1000L));
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after);
+
+        assertThat(result.isOk()).isTrue();
+        assertThat(result.get().identical()).isTrue();
+    }
+
+    @Test
+    void uuidFieldComparesAsLeaf() {
+        UuidFieldBean before = new UuidFieldBean();
+        before.setId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+        UuidFieldBean after = new UuidFieldBean();
+        after.setId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+
+        Result<DiffResult, CompareError> result = engine.diff(before, after);
+
+        assertThat(result.isOk()).as("P2 扩表后 UUID 是叶子类型").isTrue();
+        assertThat(result.get().changes()).hasSize(1);
+        var change = result.get().changes().get(0);
+        assertThat(change.path()).isEqualTo("id");
+        assertThat(change.oldText()).isEqualTo("11111111-1111-1111-1111-111111111111");
+        assertThat(change.newText()).isEqualTo("22222222-2222-2222-2222-222222222222");
     }
 
     private static OrderBean baseOrder() {

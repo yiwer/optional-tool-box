@@ -10,23 +10,19 @@ import cn.code91.toolbox.compare.core.FieldAccessError;
 import cn.code91.toolbox.compare.core.TypeMismatch;
 import cn.code91.toolbox.compare.spi.CompareHandlerRegistry;
 import cn.code91.toolbox.compare.testfixtures.ChainBean;
-import cn.code91.toolbox.compare.testfixtures.DateFieldBean;
 import cn.code91.toolbox.compare.testfixtures.FaultyBean;
 import cn.code91.toolbox.compare.testfixtures.NoteBean;
 import cn.code91.toolbox.compare.testfixtures.SelfRefBean;
 import cn.code91.toolbox.compare.testfixtures.SetFieldBean;
-import cn.code91.toolbox.compare.testfixtures.UuidFieldBean;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -191,40 +187,6 @@ class ReflectionDiffEngineErrorTest {
 
         assertThat(result.isErr()).as("Set 字段应返回 Err 而非抛异常").isTrue();
         assertThat(result.getErr().path()).isEqualTo("tags");
-    }
-
-    /**
-     * I2 回归：{@code java.util.Date} 不在叶子类型表内（P2 backlog，本次不扩表），
-     * 引擎按普通对象递归展开其内部字段时会命中 JDK 模块边界反射限制；该失败必须
-     * 转换为带路径的 Err，而非把 {@code InaccessibleObjectException} 直接抛给调用方。
-     */
-    @Test
-    void dateFieldReturnsErrInsteadOfThrowing() {
-        DateFieldBean before = new DateFieldBean();
-        before.setCreatedAt(new Date(1000L));
-        DateFieldBean after = new DateFieldBean();
-        after.setCreatedAt(new Date(2000L));
-
-        Result<DiffResult, CompareError> result = engine.diff(before, after);
-
-        assertThat(result.isErr()).as("java.util.Date 字段应返回 Err 而非抛异常").isTrue();
-        assertThat(result.getErr().path()).isEqualTo("createdAt");
-    }
-
-    /**
-     * I2 回归：{@code UUID} 同样不在叶子类型表内，按普通对象展开时命中同一类反射限制。
-     */
-    @Test
-    void uuidFieldReturnsErrInsteadOfThrowing() {
-        UuidFieldBean before = new UuidFieldBean();
-        before.setId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-        UuidFieldBean after = new UuidFieldBean();
-        after.setId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-
-        Result<DiffResult, CompareError> result = engine.diff(before, after);
-
-        assertThat(result.isErr()).as("UUID 字段应返回 Err 而非抛异常").isTrue();
-        assertThat(result.getErr().path()).isEqualTo("id");
     }
 
     private static ChainBean buildChain(int length) {

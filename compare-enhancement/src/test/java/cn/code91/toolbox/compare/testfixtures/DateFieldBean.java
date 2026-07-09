@@ -3,10 +3,9 @@ package cn.code91.toolbox.compare.testfixtures;
 import java.util.Date;
 
 /**
- * 含 {@code java.util.Date} 字段的测试夹具（I2 回归）：{@code Date} 不在叶子类型表内
- * （见 {@code LeafValues#isLeaf}，只认 {@code TemporalAccessor}），引擎应把它当普通对象递归
- * 展开字段——但 {@code Date} 的私有字段（如 {@code fastTime}/{@code cdate}）触发
- * {@code InaccessibleObjectException} 时应转换为显式 Err，而非抛未受检异常。
+ * 含 {@code java.util.Date} 字段的测试夹具。P2 扩表后 {@code Date} 已是叶子类型
+ * （{@code LeafValues#isLeaf}），供叶子矩阵正向用例使用；历史上曾是 I2 回归夹具
+ * （扩表前 Date 走对象图反射并收敛为 Err）。
  */
 public class DateFieldBean {
 
