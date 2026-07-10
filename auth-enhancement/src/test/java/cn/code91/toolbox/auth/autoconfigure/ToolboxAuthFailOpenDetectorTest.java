@@ -85,7 +85,8 @@ class ToolboxAuthFailOpenDetectorTest {
     void detectsEnvVarFormKeys() {
         // ③ 终审加固钉（B+C Minor #1）：SystemEnvironmentPropertySource 呈现的是裸大写下划线名
         // （如 k8s 注入），presentAuthKeys 的 TOOLBOX_AUTH_ 前缀半分支此前无覆盖——若被删本钉变红。
-        // runner 属性源只能造点分格式，经 initializer 头插 MapPropertySource 模拟环境变量源。
+        // 为忠实模拟系统环境变量源形态，经 initializer 头插命名 MapPropertySource（不借道
+        // runner 通用 test 源；withPropertyValues 同样保留原样键名，选此途径非因其唯一）。
         missingEngineRunner()
                 .withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
                         new MapPropertySource("fakeSystemEnv",
