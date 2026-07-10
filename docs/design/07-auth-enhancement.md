@@ -320,7 +320,7 @@ jacoco 门禁沿用父 pom 80/80/70。
 | **不做**（2026-07-10 用户拍板，原 P2） | **S2S client_credentials 翼**（R1 裁定移出 P1）：命名客户端注册表 + `OAuth2ClientHttpRequestInterceptor` 挂 facility `HttpClients`/`RestClient` + 取令牌 API 返 `Result<T, AuthError>`——内容保留作历史裁定记录，client 端能力整体裁撤 | 业务未来出现再重开裁定轮 |
 | P2 | 多 issuer / 多 realm（`JwtIssuerAuthenticationManagerResolver` + 配置 registry 化） | 多租户/多环境共存需求 |
 | P2 | token relay（收到的用户 token 透传下游） | 网关/编排场景 |
-| P2 | **实施修正（Task 6 实证补件，§5.4/§4.3 呼应）**：`jwks_unavailable` 与 `invalid_token` 拆分为独立观测码（当前统一归一化为 401/`invalid_token`，见 §5.4）；`@EnableMethodSecurity` 双重声明幂等行为（消费方已自行声明时的覆盖注册语义）补专项回归钉——**幂等回归钉已落地（2026-07-10 P2 测试债迭代，`duplicateEnableMethodSecurityDeclarationIsIdempotent`）；观测码拆分已裁定（R8，2026-07-10，§4.3/§5.4）实施中** | 需要更细粒度 IdP 故障可观测性时；升级 Spring Security 大版本前复核该幂等假设（以已落地的幂等钉复核） |
-| P2 | 运行期 fail-open 探测（L1 缺引擎类但检测到 toolbox.auth.* 配置时启动 WARN）；测试债归并（断言补 .as()、工厂默认回落分支、桥接异常路径清理钉、chainSubSwitch 断言抗重构化）——**测试债归并已落地（2026-07-10 P2 测试债迭代）；fail-open 探测已裁定（R6/R7，2026-07-10，§5.5）实施中** | 终审归并（2026-07-10） |
+| P2 | **实施修正（Task 6 实证补件，§5.4/§4.3 呼应）**：`jwks_unavailable` 与 `invalid_token` 拆分为独立观测码（当前统一归一化为 401/`invalid_token`，见 §5.4）；`@EnableMethodSecurity` 双重声明幂等行为（消费方已自行声明时的覆盖注册语义）补专项回归钉——**幂等回归钉已落地（2026-07-10 P2 测试债迭代，`duplicateEnableMethodSecurityDeclarationIsIdempotent`）；观测码拆分已落地（R8，2026-07-10 B+C 迭代，§4.3/§5.4）** | 需要更细粒度 IdP 故障可观测性时；升级 Spring Security 大版本前复核该幂等假设（以已落地的幂等钉复核） |
+| P2 | 运行期 fail-open 探测（L1 缺引擎类但检测到 toolbox.auth.* 配置时启动 WARN）；测试债归并（断言补 .as()、工厂默认回落分支、桥接异常路径清理钉、chainSubSwitch 断言抗重构化）——**测试债归并已落地（2026-07-10 P2 测试债迭代）；fail-open 探测已落地（R6/R7，2026-07-10 B+C 迭代，§5.5）** | 终审归并（2026-07-10） |
 | P3+ | opaque token introspection（KC lightweight access token 场景）、WebFlux 支持 | 明确业务出现 |
 | 独立评估 | Keycloak Admin Client（身份管理域，非鉴权域） | 管理后台程序化建户需求出现时，评估独立模块 |

@@ -46,7 +46,7 @@ public BaseResponse<List<Order>> list() {
 不引 `spring-boot-starter-oauth2-resource-server`（L1 缺类不装配）或设
 `toolbox.auth.enabled=false`（L2），本模块整体不装配，应用不受影响。
 
-⚠️ 注意：缺引擎类的退出态是**无任何鉴权保护（fail-open）**，不是降级——依赖重构时若 starter 被意外 exclude，应用会静默裸奔。`enabled=false` / `security-chain.enabled=false` 两种退出态则落到 Boot 默认链（fail-closed），性质不同。
+⚠️ 注意：缺引擎类的退出态是**无任何鉴权保护（fail-open）**，不是降级——依赖重构时若 starter 被意外 exclude，应用会静默裸奔。`enabled=false` / `security-chain.enabled=false` 两种退出态则落到 Boot 默认链（fail-closed），性质不同。缓解：缺引擎类但检测到 `toolbox.auth.*` 配置在场时，启动期打一条 WARN（fail-open 探测器，设计 §5.5；`enabled=false` 显式退出不警）——WARN 是提醒不是保护，依赖治理仍是第一道防线。
 
 ## 配置速查（`toolbox.auth.*`）
 
@@ -72,8 +72,10 @@ public BaseResponse<List<Order>> list() {
 
 引 jar +`enabled`（默认开）+ `server-url`/`realm` 缺失或畸形 ⇒ **启动失败**，异常消息携带最小可用
 配置样例（fail-fast，对位 00-overview 设计原则 8）。issuer/JWKS 端点本地派生，构建期不发任何网络
-请求——KC 暂时不可达不影响启动，bearer 请求得 401（不会放大为 500）。"引了暂不用"的合法出口是
-`toolbox.auth.enabled=false`。
+请求——KC 暂时不可达不影响启动，bearer 请求得 401（不会放大为 500）。KC 不可达的 401 与坏 token
+的 401 在响应体 `description` 上区分：前者 `jwks_unavailable`（同时打 WARN 一条），后者
+`invalid_token`（设计 §4.3）；`WWW-Authenticate` 头恒为标准 `invalid_token` 不扩展。"引了暂不用"
+的合法出口是 `toolbox.auth.enabled=false`。
 
 ## 可替换 Seam（`@ConditionalOnMissingBean`）
 
