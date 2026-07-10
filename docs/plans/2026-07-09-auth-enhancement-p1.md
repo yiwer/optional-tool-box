@@ -737,6 +737,35 @@ class AuthContextTest {
         assertThat(AuthContext.hasClientRole("toolbox-api", "x")).isFalse();
         assertThat(AuthContext.hasClientRole("nope", "doc-reader")).isFalse();
     }
+
+    @Test
+    void nullValuedClaimAndNullArgumentsAreNeverErrors() {
+        // Task 2 审查修正回归钉：JSON null 经解码可合法落入 claims；null 入参走"无匹配"语义。
+        Jwt withNullClaim = Jwt.withTokenValue("t").header("alg", "RS256").subject("sub-2")
+                .claim("preferred_username", "bob")
+                .claim("custom_nullable", null)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        TestingAuthenticationToken auth = new TestingAuthenticationToken(withNullClaim, "n/a");
+        auth.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        CurrentUser user = AuthContext.current()
+                .orElseThrow(() -> new AssertionError("null 值 claim 不得使适配失败（07 §3 常态而非错误）"));
+        assertThat(user.rawClaims()).as("null 值 claim 视同缺失剔除").doesNotContainKey("custom_nullable");
+        assertThat(AuthContext.hasRole(null)).as("null 角色名恒 false 而非 NPE").isFalse();
+        assertThat(AuthContext.hasClientRole(null, "r")).isFalse();
+        assertThat(AuthContext.hasClientRole("c", null)).isFalse();
+    }
+
+    @Test
+    void usernameFallsBackToSubWhenBlank() {
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("sub-3")
+                .claim("dummy", "x")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(CurrentUser.from(jwt, " ").username())
+                .as("username 空白回落 sub（07 §4.1）").isEqualTo("sub-3");
+        assertThat(CurrentUser.from(jwt, null).username()).isEqualTo("sub-3");
+    }
 }
 ```
 
@@ -755,6 +784,7 @@ package cn.code91.toolbox.auth.core;
 
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -786,8 +816,18 @@ public record CurrentUser(
         rawClaims = rawClaims == null ? Map.of() : Map.copyOf(rawClaims);
     }
 
-    /** 从 Jwt 适配（username 由调用方给定——AuthContext 用 authentication.getName()） */
+    /**
+     * 从 Jwt 适配（username 由调用方给定——AuthContext 用 authentication.getName()）。
+     * null 值 claim 视同缺失剔除（Task 2 审查修正：Map.copyOf 拒绝 null 值，JSON null 经
+     * 解码可合法出现在 claims 中；与 KeycloakClaims 的空安全语义一致）。
+     */
     public static CurrentUser from(Jwt jwt, String username) {
+        Map<String, Object> raw = new LinkedHashMap<>();
+        jwt.getClaims().forEach((k, v) -> {
+            if (v != null) {
+                raw.put(k, v);
+            }
+        });
         return new CurrentUser(
                 jwt.getSubject(),
                 username == null || username.isBlank() ? jwt.getSubject() : username,
@@ -795,7 +835,7 @@ public record CurrentUser(
                 jwt.getClaimAsString("name"),
                 KeycloakClaims.realmRoles(jwt),
                 KeycloakClaims.clientRoles(jwt),
-                jwt.getClaims());
+                raw);
     }
 }
 ```
@@ -838,13 +878,19 @@ public final class AuthContext {
         return current().isPresent();
     }
 
-    /** {@return 是否拥有指定 realm 角色}（原始名，不带 ROLE_ 前缀） */
+    /** {@return 是否拥有指定 realm 角色}（原始名，不带 ROLE_ 前缀；null 入参恒 false——不可变集合 contains(null) 抛 NPE，Task 2 审查修正） */
     public static boolean hasRole(String realmRole) {
+        if (realmRole == null) {
+            return false;
+        }
         return current().map(u -> u.realmRoles().contains(realmRole)).orElse(false);
     }
 
-    /** {@return 是否拥有指定 client 的角色}（读 resource_access 原始结构，无跨 client 重名歧义） */
+    /** {@return 是否拥有指定 client 的角色}（读 resource_access 原始结构，无跨 client 重名歧义；null 入参恒 false，同上） */
     public static boolean hasClientRole(String clientId, String role) {
+        if (clientId == null || role == null) {
+            return false;
+        }
         return current()
                 .map(u -> u.clientRoles().getOrDefault(clientId, Set.of()).contains(role))
                 .orElse(false);
