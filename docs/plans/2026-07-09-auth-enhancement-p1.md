@@ -2841,15 +2841,18 @@ mvn -q -pl auth-enhancement test "-Dtest=KeycloakRealChainIT"
 4. 内外网地址不一致：`issuer-uri` 覆写示例。
 5. 真实 KC 手动冒烟清单（不进 CI）：换真实 server-url/realm、验证 200/401/403 三态、角色映射抽查。
 
-- [ ] **Step 5: 设计文档状态行更新**
+- [ ] **Step 5: 设计文档收敛（状态行 + 实施期实证修正回签）**
 
-`docs/design/07-auth-enhancement.md` 首行下方状态行：
+`docs/design/07-auth-enhancement.md` 做以下**限定性**修改（每处附"实施修正（Task N 实证）"字样，不重写其他内容）：
 
-```
-> 状态：P1 已实施（feat/auth-enhancement-p1）｜原设计稿 v0.1 裁定 R1-R5｜日期：2026-07-09
-```
+1. 首行下方状态行：`> 状态：P1 已实施（分支 worktree-feat+auth-enhancement-p1）｜原设计稿 v0.1 裁定 R1-R5｜日期：2026-07-10`
+2. §2.2 坑 3 行补一句：反向场景同真——`@PreAuthorize` 在 controller 方法内抛出的 `AccessDeniedException` 会被 facility 全局兜底 `@ExceptionHandler(Exception.class)` 吃成 200/500，模块以高优先级 `SecurityExceptionAdvice` 接管（Task 6 矩阵实证）。
+3. §4 结构图 web/ 下补一行 `SecurityExceptionAdvice.java`；§4.3 末尾补该组件小段（MVC 层出口、@Order(HIGHEST+1000) 留覆盖空间、仅接管两类安全异常委托既有 handler）；同段把"实现只依赖 jakarta.servlet + facility JsonUtil，不引 spring-web"收窄为"EntryPoint/Filter 实现类不引 spring-web；SecurityExceptionAdvice 是 MVC 组件依赖 spring-web 注解（optional 编译面，Task 5 裁定）"。
+4. §5.4 末行"（`description=jwks_unavailable` 风格错误码）"改为"（实施收敛：统一 401/`invalid_token`——取键失败经 BadJwtException 归一化；`jwks_unavailable` 区分观测码记 P2）"。
+5. §7 依赖表 optional 行补 spring-web（编译面签名解析，Task 5）；"父 pom 唯一改动"句改为列三条 test 件 pin：testcontainers-keycloak 4.1.1、nimbus-jose-jwt 9.37.4（Boot BOM 不管理，Task 1 实证）、（wiremock-jetty12 用既有 wiremock.version，无新 pin）。
+6. §10 演进表 P2 行补一格：jwks_unavailable 区分观测码；@EnableMethodSecurity 双重声明幂等回归钉。
 
-（只改这一行；文档其余内容与实现一致性由终审核对。）
+另外一处**代码 Javadoc 顺修**（Task 6 审查 Minor）：`ToolboxAuthAutoConfiguration` 类级 Javadoc 的"L4 Seam 三级"句补第四个可覆盖点（SecurityExceptionAdvice，@ConditionalOnMissingBean）。改后跑 `mvn -q -pl auth-enhancement test` 确认无碍（纯注释）。
 
 - [ ] **Step 6: 全模块 verify（jacoco + analyze + ArchUnit 门禁）**
 
