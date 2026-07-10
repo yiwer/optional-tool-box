@@ -36,6 +36,23 @@ class KeycloakJwtDecoderFactoryTest {
     }
 
     @Test
+    void nullClockSkewAndAlgorithmsFallBackToDefaults() {
+        // P1 账本 T3 Minor 回归钉：clockSkew=null→60s、jws-algorithms=null→RS256
+        // （07 §5.4 默认值）。行为级验证（真按 60s/RS256 校验）属 WireMock 全链域，
+        // 此处按本类既定范围钉"回落分支离线可构建"。
+        JwtDecoder decoder = KeycloakJwtDecoderFactory.create(
+                "https://kc.invalid.example", "r", null, null, null, null);
+        assertThat(decoder).as("clockSkew/algorithms 双 null 回落默认值后离线可构建").isNotNull();
+    }
+
+    @Test
+    void emptyAlgorithmListFallsBackToRs256() {
+        JwtDecoder decoder = KeycloakJwtDecoderFactory.create(
+                "https://kc.invalid.example", "r", null, null, Duration.ofSeconds(60), List.of());
+        assertThat(decoder).as("空算法列表回落 RS256（07 §5.4），非 fail-fast 对象").isNotNull();
+    }
+
+    @Test
     void propagatesConfigErrors() {
         assertThatThrownBy(() -> KeycloakJwtDecoderFactory.create(
                 null, "r", null, null, Duration.ofSeconds(60), List.of("RS256")))
