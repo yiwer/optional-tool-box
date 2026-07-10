@@ -55,6 +55,16 @@ class SpringdocDocsExporterTest {
     }
 
     @Test
+    void unknownGroupWithNoConfiguredGroupsSaysNone() {
+        SpringdocDocsExporter exporter = new SpringdocDocsExporter(providerOf(), providerOf(), List.of());
+
+        Result<byte[], DocsError> result = exporter.export("nope", ExportFormat.JSON);
+
+        assertThat(result.isErr()).isTrue();
+        assertThat(result.getErr().message()).contains("（无）");
+    }
+
+    @Test
     void blankGroupMeansDefaultDocument() throws Exception {
         OpenApiWebMvcResource resource = Mockito.mock(OpenApiWebMvcResource.class);
         Mockito.when(resource.openapiJson(any(), anyString(), any())).thenReturn(SPEC_JSON);

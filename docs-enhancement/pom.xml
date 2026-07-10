@@ -34,6 +34,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot</artifactId>
         </dependency>
+        <!-- 装配类直接使用 @Bean/@Configuration 与 ResourceBundleMessageSource、exporter 使用
+             LocaleContextHolder（均位于 spring-context），此前仅靠传递引入（storage 先例）。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
         <!-- ResultLeakDetector 直接使用 ObjectProvider/SmartInitializingSingleton（位于
              spring-beans）；ResponseEntity 等位于 spring-web；RequestMappingHandlerMapping/
              HandlerMethod 遍历位于 spring-webmvc——三者均为字节码直接引用，逐条显式声明。 -->
@@ -97,10 +103,17 @@
             <scope>test</scope>
         </dependency>
         <!-- spring-boot-starter-test 聚合传递引入，测试代码直接 import 以下类型
-             （MockEnvironment/MockHttpServletRequest 等），依赖账目守卫要求显式声明。 -->
+             （MockEnvironment/MockHttpServletRequest；OutputCaptureExtension/FilteredClassLoader/
+             ApplicationContextRunner/TestRestTemplate 位于 spring-boot-test），依赖账目守卫要求
+             逐条显式声明。 -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -142,5 +155,31 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>analyze-only</id>
+                        <configuration>
+                            <failOnWarning>true</failOnWarning>
+                            <ignoredUnusedDeclaredDependencies>
+                                <!-- 父 pom 既有两条聚合 artifact 误报（完整重列，避免依赖插件配置合并顺序，
+                                     同 storage 先例）。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-test</ignoredUnusedDeclaredDependency>
+                                <ignoredUnusedDeclaredDependency>com.tngtech.archunit:archunit-junit5</ignoredUnusedDeclaredDependency>
+                                <!-- spring-boot-starter-web：IT 内嵌 Tomcat 的聚合胶水依赖（裁定 F），
+                                     字节码不会直接引用聚合 artifact，属误报。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+                            </ignoredUnusedDeclaredDependencies>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>
