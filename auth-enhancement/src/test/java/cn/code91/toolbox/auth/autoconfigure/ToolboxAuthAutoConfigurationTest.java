@@ -1,6 +1,7 @@
 package cn.code91.toolbox.auth.autoconfigure;
 
 import cn.code91.toolbox.auth.jwt.KeycloakJwtAuthenticationConverter;
+import cn.code91.toolbox.auth.web.SecurityExceptionAdvice;
 import cn.code91.toolbox.auth.web.SessionUserBridgeFilter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -168,6 +169,18 @@ class ToolboxAuthAutoConfigurationTest {
                         .doesNotHaveBean(ToolboxAuthAutoConfiguration.MethodSecurityConfiguration.class));
     }
 
+    @Test
+    void securityExceptionAdviceAssembledAndOverridable() {
+        webRunner.withPropertyValues(MINIMAL).run(context ->
+                assertThat(context).as("方法级安全异常出口默认装配（07 §4.3 补件）")
+                        .hasSingleBean(SecurityExceptionAdvice.class));
+        webRunner.withPropertyValues(MINIMAL)
+                .withUserConfiguration(UserAdviceConfig.class)
+                .run(context -> assertThat(context.getBean(SecurityExceptionAdvice.class))
+                        .as("L4：用户自有 advice 退让模块默认件")
+                        .isSameAs(context.getBean(UserAdviceConfig.class).advice));
+    }
+
     private static String rootMessage(Throwable t) {
         Throwable cur = t;
         while (cur.getCause() != null) {
@@ -184,6 +197,16 @@ class ToolboxAuthAutoConfigurationTest {
         SecurityFilterChain customChain(HttpSecurity http) throws Exception {
             chain = http.securityMatcher("/custom/**").build();
             return chain;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserAdviceConfig {
+        SecurityExceptionAdvice advice = new SecurityExceptionAdvice();
+
+        @Bean
+        SecurityExceptionAdvice userAdvice() {
+            return advice;
         }
     }
 

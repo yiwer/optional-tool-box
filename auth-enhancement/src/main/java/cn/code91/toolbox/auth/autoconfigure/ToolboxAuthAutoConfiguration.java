@@ -4,6 +4,7 @@ import cn.code91.toolbox.auth.jwt.KeycloakJwtAuthenticationConverter;
 import cn.code91.toolbox.auth.jwt.KeycloakJwtDecoderFactory;
 import cn.code91.toolbox.auth.web.AuthAccessDeniedHandler;
 import cn.code91.toolbox.auth.web.AuthEntryPoint;
+import cn.code91.toolbox.auth.web.SecurityExceptionAdvice;
 import cn.code91.toolbox.auth.web.SessionUserBridgeFilter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -132,5 +133,21 @@ public class ToolboxAuthAutoConfiguration {
             havingValue = "true", matchIfMissing = true)
     @EnableMethodSecurity
     static class MethodSecurityConfiguration {
+    }
+
+    /**
+     * 方法级安全异常出口（Task 6 实证补件，07 §4.3）：@PreAuthorize 拒绝走 MVC 异常解析，
+     * 需 advice 抢在 facility 全局兜底前写出 403；非链组件，自建链（Seam 1）消费方同样受益，
+     * 故不挂 security-chain 子开关，仅 L4（自声明同类型 bean）可覆盖。
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.web.bind.annotation.RestControllerAdvice")
+    static class MvcSecurityExceptionConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public SecurityExceptionAdvice toolboxAuthSecurityExceptionAdvice() {
+            return new SecurityExceptionAdvice();
+        }
     }
 }
