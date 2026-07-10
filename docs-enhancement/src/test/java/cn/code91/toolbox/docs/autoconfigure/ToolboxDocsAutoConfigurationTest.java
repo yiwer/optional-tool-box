@@ -178,8 +178,10 @@ class ToolboxDocsAutoConfigurationTest {
         contextRunner.run(context -> {
             FilterRegistrationBean<?> registration = context.getBean(FilterRegistrationBean.class);
             assertThat(registration.getFilter()).isInstanceOf(DocsExposureFilter.class);
+            // 含 yaml 变体端点（裁定 D 修订：springdoc 另注册 {api-docs.path}.yaml 与分组 .yaml/{group}）。
             assertThat(registration.getUrlPatterns()).containsExactlyInAnyOrder(
-                    "/v3/api-docs", "/v3/api-docs/*", "/swagger-ui.html", "/swagger-ui/*", "/toolbox/docs/export");
+                    "/v3/api-docs", "/v3/api-docs/*", "/v3/api-docs.yaml", "/v3/api-docs.yaml/*",
+                    "/swagger-ui.html", "/swagger-ui/*", "/toolbox/docs/export");
         });
     }
 
@@ -193,8 +195,8 @@ class ToolboxDocsAutoConfigurationTest {
                 .run(context -> {
                     FilterRegistrationBean<?> registration = context.getBean(FilterRegistrationBean.class);
                     assertThat(registration.getUrlPatterns()).containsExactlyInAnyOrder(
-                            "/custom/docs", "/custom/docs/*", "/custom/ui.html", "/swagger-ui/*",
-                            "/toolbox/docs/export");
+                            "/custom/docs", "/custom/docs/*", "/custom/docs.yaml", "/custom/docs.yaml/*",
+                            "/custom/ui.html", "/swagger-ui/*", "/toolbox/docs/export");
                 });
     }
 

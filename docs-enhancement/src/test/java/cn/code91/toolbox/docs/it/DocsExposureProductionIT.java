@@ -16,7 +16,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         classes = DocsItApplication.class,
-        properties = "spring.main.banner-mode=off")
+        properties = {
+                "spring.main.banner-mode=off",
+                // 配置一个分组，使 springdoc 的分组 yaml 变体端点（/v3/api-docs.yaml/{group}）真实存在，
+                // 与 OverrideIT 配对证明其 404 出自门禁而非 handler 缺失（裁定 D 修订）。
+                "toolbox.docs.groups.admin.paths-to-match=/admin/**"
+        })
 @ActiveProfiles("prod")
 class DocsExposureProductionIT {
 
@@ -26,6 +31,16 @@ class DocsExposureProductionIT {
     @Test
     void apiDocsIsBlockedInProduction() {
         assertThat(restTemplate.getForEntity("/v3/api-docs", String.class).getStatusCode().value()).isEqualTo(404);
+    }
+
+    @Test
+    void apiDocsYamlVariantEndpointsAreBlockedInProduction() {
+        // 裁定 D 修订：springdoc 另注册 {api-docs.path}.yaml（及分组 .yaml/{group}）端点，
+        // 门禁 urlPatterns 必须一并覆盖，否则生产下 yaml 变体成泄漏面。
+        assertThat(restTemplate.getForEntity("/v3/api-docs.yaml", String.class).getStatusCode().value())
+                .isEqualTo(404);
+        assertThat(restTemplate.getForEntity("/v3/api-docs.yaml/admin", String.class).getStatusCode().value())
+                .isEqualTo(404);
     }
 
     @Test

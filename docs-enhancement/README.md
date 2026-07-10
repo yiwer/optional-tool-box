@@ -76,9 +76,9 @@ bean 即被 springdoc 收集，本模块不另设 SPI。
 - **Postman 导出为最小可用**：collection v2.1 仅含逐 endpoint 的 method/url/name（summary →
   operationId → `METHOD path` 三级兜底），不含 auth/body/示例。
 - **Servlet-only**：对齐 facility 现有 Web 基建技术栈，WebFlux 不在 P1 范围。
-- **门禁覆盖路径**：`springdoc.api-docs.path`（含 `/{group}` 子路径）、`springdoc.swagger-ui.path`、
-  `/swagger-ui/*`、`/toolbox/docs/export`——api-docs/swagger-ui 路径读 springdoc 同名属性，消费方改
-  路径时门禁自动跟随。
+- **门禁覆盖路径**：`springdoc.api-docs.path`（含 `/{group}` 子路径与 `.yaml` 变体端点，即默认的
+  `/v3/api-docs.yaml` 与 `/v3/api-docs.yaml/{group}`）、`springdoc.swagger-ui.path`、`/swagger-ui/*`、
+  `/toolbox/docs/export`——api-docs/swagger-ui 路径读 springdoc 同名属性，消费方改路径时门禁自动跟随。
 - **注册文件的唯一例外**：模块装配入口只有 `ToolboxDocsAutoConfiguration`
   （`META-INF/spring/...AutoConfiguration.imports`）；另有 `META-INF/spring.factories` 注册
   `DocsGroupsEnvironmentPostProcessor`——Boot 3 对 EnvironmentPostProcessor 仍只认 spring.factories，

@@ -103,8 +103,12 @@ public class ToolboxDocsAutoConfiguration {
         String swaggerUiPath = environment.getProperty("springdoc.swagger-ui.path", "/swagger-ui.html");
         FilterRegistrationBean<DocsExposureFilter> registration =
                 new FilterRegistrationBean<>(new DocsExposureFilter(gate, environment));
+        // yaml 变体两条（裁定 D 修订）：springdoc 另注册 {api-docs.path}.yaml 与分组
+        // .yaml/{group} 端点，Servlet 匹配规则下前两条 pattern 覆盖不到 .yaml 后缀路径，
+        // 缺之生产环境 yaml 变体成泄漏面（IT 实测钉住）。
         registration.addUrlPatterns(
-                apiDocsPath, apiDocsPath + "/*", swaggerUiPath, "/swagger-ui/*", DocsExportController.PATH);
+                apiDocsPath, apiDocsPath + "/*", apiDocsPath + ".yaml", apiDocsPath + ".yaml/*",
+                swaggerUiPath, "/swagger-ui/*", DocsExportController.PATH);
         return registration;
     }
 

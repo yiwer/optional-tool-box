@@ -17,7 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = DocsItApplication.class,
         properties = {
                 "spring.main.banner-mode=off",
-                "toolbox.docs.exposure.expose-in-production=true"
+                "toolbox.docs.exposure.expose-in-production=true",
+                // 与 DocsExposureProductionIT 同配分组：yaml 变体端点（含分组）在显式打开时恢复 200，
+                // 配对证明未打开时的 404 出自门禁过滤器（裁定 D 修订）。
+                "toolbox.docs.groups.admin.paths-to-match=/admin/**"
         })
 @ActiveProfiles("prod")
 class DocsExposureProductionOverrideIT {
@@ -28,6 +31,14 @@ class DocsExposureProductionOverrideIT {
     @Test
     void apiDocsIsExposedAgainWithExplicitOptIn() {
         assertThat(restTemplate.getForEntity("/v3/api-docs", String.class).getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void apiDocsYamlVariantEndpointsAreExposedAgainWithExplicitOptIn() {
+        assertThat(restTemplate.getForEntity("/v3/api-docs.yaml", String.class).getStatusCode().value())
+                .isEqualTo(200);
+        assertThat(restTemplate.getForEntity("/v3/api-docs.yaml/admin", String.class).getStatusCode().value())
+                .isEqualTo(200);
     }
 
     @Test
