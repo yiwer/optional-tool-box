@@ -9,6 +9,7 @@
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
+        <module>auth-enhancement</module>
         <module>database-enhancement</module>
         <module>llm-enhancement</module>
         <module>compare-enhancement</module>
@@ -35,6 +36,16 @@
         <!-- server-facility 自身将 tika-core 声明为 optional（不透传）；storage-enhancement 的
              上传守卫直接使用 MimeTyping（内部依赖 Tika），版本对齐 server-facility 实测所用版本。 -->
         <tika.version>3.2.3</tika.version>
+        <!-- auth-enhancement 真 Keycloak 集成测试（test-only）；Boot BOM 不管理 com.github.dasniko，
+             4.1.1 默认对齐 Keycloak 26.5（其传递的 keycloak-admin-client 仅 test 作用域，
+             不构成运行时 KC 依赖，07 §7）。 -->
+        <testcontainers-keycloak.version>4.1.1</testcontainers-keycloak.version>
+        <!-- auth-enhancement 测试铸 token（test-only）；spring-security-oauth2-jose 以 compile
+             传递引入 nimbus-jose-jwt，但 Boot BOM 与 spring-security-bom 均不管理该坐标
+             （.m2 实测核验）——测试代码直接使用其 API（RSAKey/RSASSASigner/SignedJWT），
+             依赖账目守卫要求显式声明，版本收口于此，对齐 oauth2-jose 6.5.7 自身声明的
+             传递版本，避免漂移（同 aliyun-java-sdk-core / tika-core 先例）。 -->
+        <nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
     </properties>
 
     <dependencyManagement>
@@ -95,6 +106,16 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.dasniko</groupId>
+                <artifactId>testcontainers-keycloak</artifactId>
+                <version>${testcontainers-keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
             <dependency>
                 <groupId>p6spy</groupId>

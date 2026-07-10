@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>cn.code91</groupId>
+        <artifactId>optional-tool-box</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>auth-enhancement</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>cn.code91</groupId>
+            <artifactId>server-facility</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <!-- 装配类直接使用 @EnableConfigurationProperties/@ConfigurationProperties/@DefaultValue（spring-boot）、
+             @Bean/@Configuration（spring-context）、ObjectProvider 不用但 Duration 绑定与 Ordered 等
+             （spring-core）；同 compare/storage/mail 教训：仅靠传递引入会被 dependency:analyze 判
+             "直接使用未声明"。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+        </dependency>
+
+        <!-- 鉴权引擎：optional=true，消费方自行引 starter（00 依赖治理四层；07 §7/§8）。
+             starter 是交付物标记；下方逐件声明实际内容依赖（字节码直接引用处见各注释）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- SecurityContextHolder/Authentication/GrantedAuthority（core 门面与 converter）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- HttpSecurity/SessionCreationPolicy/Customizer/@EnableMethodSecurity（装配层）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-config</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- SecurityFilterChain/AuthenticationEntryPoint/AccessDeniedHandler/AuthorizationFilter（web 翼）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-web</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- OAuth2AuthenticationException/OAuth2Error（EntryPoint 错误码提取）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Jwt/JwtDecoder/NimbusJwtDecoder/JwtValidators/OAuth2TokenValidator 装配（jwt 包 + core 值类型）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- JwtAuthenticationToken/BearerTokenAuthenticationFilter 位点（converter 产物与链装配）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-resource-server</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- EntryPoint/DeniedHandler/BridgeFilter 直接使用 HttpServletRequest/Response 与 Filter；
+             消费方经 starter-web 获得实现，模块侧仅编译面（07 §4.3：web 翼不引 spring-web）。 -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- MockHttpServletRequest/Response 与 MockMvc 相关类型直接 import（spring-test 为
+             starter-test 实际内容件，同 mail 对 spring-boot-test 的显式声明先例）。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- jwt()/springSecurity() 测试后处理器（07 §9）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 全链测试宿主：测试用 @SpringBootApplication + @RestController 需要 MVC/内嵌容器聚合；
+             注解本体（@RestController/@GetMapping）在 spring-web，测试代码直接 import 需另行声明。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 假 JWKS 端点（07 §9 无 Docker 主矩阵）；jetty12 变体经 ServiceLoader 装配，
+             同 llm 先例（其 pom 注释详述）。 -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 测试铸 token（RSAKey/RSASSASigner/SignedJWT）；运行期 nimbus 经 oauth2-jose 传递，
+             测试代码直接 import 需显式声明（版本由父 pom pin——Boot BOM 与 spring-security-bom
+             均不管理该坐标，Task 1 实测修正，对齐 oauth2-jose 自声明传递版本 9.37.4）。 -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 真 Keycloak IT（07 §9）；容器 API 直接使用两件均需声明。 -->
+        <dependency>
+            <groupId>com.github.dasniko</groupId>
+            <artifactId>testcontainers-keycloak</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>analyze-only</id>
+                        <configuration>
+                            <failOnWarning>true</failOnWarning>
+                            <ignoredUnusedDeclaredDependencies>
+                                <!-- 父 pom 既有两条聚合 artifact 误报（完整重列，避免依赖插件配置合并顺序）。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-test</ignoredUnusedDeclaredDependency>
+                                <ignoredUnusedDeclaredDependency>com.tngtech.archunit:archunit-junit5</ignoredUnusedDeclaredDependency>
+                                <!-- starter-oauth2-resource-server：聚合 starter 本身不被字节码引用
+                                     （实际内容件已逐一显式声明），保留声明是 07 §7 的显式交付物
+                                     （消费方按 §8 引它即得全套引擎），同 starter-mail 先例。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-oauth2-resource-server</ignoredUnusedDeclaredDependency>
+                                <!-- starter-web（test）：为测试宿主提供 MVC+内嵌容器聚合，测试字节码
+                                     直接引用的是 spring-web/spring-test（已另行声明）。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+                            </ignoredUnusedDeclaredDependencies>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 同 llm 模块实测踩坑（其 pom 有完整因果注释）：部分 Windows 机器 %TEMP% 为
+                         8.3 短路径（含 "~"）时 JDK 21 NIO Selector 的 AF_UNIX 自唤醒管道 connect()
+                         失败，WireMock 内嵌服务器无法启动；显式指向 target/tmp 规避，
+                         对不受影响机器无副作用。 -->
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Djdk.net.unixdomain.tmpdir=${project.build.directory}/tmp</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
