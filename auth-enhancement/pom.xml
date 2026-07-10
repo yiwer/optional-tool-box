@@ -143,10 +143,41 @@
             <optional>true</optional>
         </dependency>
         <!-- 假 JWKS 端点（07 §9 无 Docker 主矩阵）；jetty12 变体经 ServiceLoader 装配，
-             同 llm 先例（其 pom 注释详述）。 -->
+             同 llm 先例（其 pom 注释详述）。排除其内部仍以 Jetty 11 坐标声明的四个传递依赖
+             （同 llm 模块同因实测：jetty-servlet/jetty-servlets/jetty-webapp 在 Jetty 12 改名
+             jetty-ee10-*，由 wiremock-jetty12 补齐；http2-server 改名 jetty-http2-server，
+             新旧 artifactId 并存于 classpath 时 HttpChannelOverHTTP2 跨大版本不兼容，实测抛
+             IncompatibleClassChangeError，依赖调解规则管不到不同 artifactId，必须显式排除）。 -->
         <dependency>
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-servlet</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-servlets</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty</groupId>
+                    <artifactId>jetty-webapp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.eclipse.jetty.http2</groupId>
+                    <artifactId>http2-server</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Task 6 实施实测修正（同 llm 先例同因）：本模块 test classpath 经 starter-web 带入
+             Jetty 12 系（Boot 3.5 管理），wiremock 主件内嵌 Jetty 11 起服务器会冲突失败；
+             wiremock-jetty12 经 ServiceLoader 提供 HttpServerFactory 适配，字节码不直接引用，
+             需 analyze 豁免（见下方 ignoredUnusedDeclaredDependencies）。 -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-jetty12</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- 测试铸 token（RSAKey/RSASSASigner/SignedJWT）；运行期 nimbus 经 oauth2-jose 传递，
@@ -221,6 +252,9 @@
                                      analyze 天然看不到——同 jakarta.servlet-api 编译面依赖豁免模式
                                      （Task 5 实测修正）。 -->
                                 <ignoredUnusedDeclaredDependency>org.springframework:spring-web</ignoredUnusedDeclaredDependency>
+                                <!-- wiremock-jetty12：ServiceLoader 装配的 HttpServerFactory 扩展，
+                                     字节码层面不会被直接引用类名（同 llm 模块先例注释）。 -->
+                                <ignoredUnusedDeclaredDependency>org.wiremock:wiremock-jetty12</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
                         </configuration>
                     </execution>
