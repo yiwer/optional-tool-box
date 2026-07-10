@@ -47,6 +47,8 @@ class ToolboxAuthAutoConfigurationTest {
             assertThat(context).hasSingleBean(JwtDecoder.class);
             assertThat(context).hasSingleBean(KeycloakJwtAuthenticationConverter.class);
             assertThat(context).hasSingleBean(SecurityFilterChain.class);
+            assertThat(context).as("模块链配置激活（与 chainSubSwitch 关侧嵌套类断言对称，A 轮终审滚存 #4）")
+                    .hasSingleBean(ToolboxAuthAutoConfiguration.SecurityChainConfiguration.class);
             assertThat(context).hasBean("toolboxAuthMessageSource");
         });
     }

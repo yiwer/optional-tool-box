@@ -47,6 +47,10 @@ class KeycloakJwtDecoderFactoryTest {
 
     @Test
     void emptyAlgorithmListFallsBackToRs256() {
+        // 终审注（A 轮 Minor #1）：Spring 的 JwkSetUri builder 对空算法集自身默认 RS256——本钉
+        // 钉的是 API 级契约（空列表≠配置错误，与 propagatesConfigErrors 的 bogus 算法 ISE 对照），
+        // 而非模块 resolveAlgorithms 的 ||isEmpty 半分支（删除该半分支本钉仍绿；null 半边由
+        // nullClockSkewAndAlgorithmsFallBackToDefaults 钉住，删除即 NPE 红）。
         JwtDecoder decoder = KeycloakJwtDecoderFactory.create(
                 "https://kc.invalid.example", "r", null, null, Duration.ofSeconds(60), List.of());
         assertThat(decoder).as("空算法列表回落 RS256（07 §5.4），非 fail-fast 对象").isNotNull();
