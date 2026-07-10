@@ -4,6 +4,7 @@ import cn.code91.facility.json.JsonUtil;
 import cn.code91.facility.locale.LocaleUtil;
 import cn.code91.facility.log.LogUtil;
 import cn.code91.facility.web.response.BaseResponse;
+import cn.code91.toolbox.auth.jwt.JwksUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.AuthenticationException;
@@ -15,8 +16,8 @@ import java.io.IOException;
 /**
  * 401 出口（07 §4.3）：Security Filter 层异常绕过 MVC 全局异常处理器，此处直接写
  * facility {@link BaseResponse} JSON 对齐全仓响应形态；同时保留 RFC 6750
- * {@code WWW-Authenticate} 头不破标准客户端。description 只带 OAuth2 错误码
- * （invalid_token 等），异常内因不回显（防探测）。
+ * {@code WWW-Authenticate} 头不破标准客户端。description 只带观测码（invalid_token 等；
+ * 取键失败经 cause 链探测细分为 jwks_unavailable，07 §4.3/R8），异常内因不回显（防探测）。
  */
 public class AuthEntryPoint implements AuthenticationEntryPoint {
 
@@ -25,13 +26,26 @@ public class AuthEntryPoint implements AuthenticationEntryPoint {
                          AuthenticationException authException) throws IOException {
         String errorCode = authException instanceof OAuth2AuthenticationException oauth
                 ? oauth.getError().getErrorCode() : null;
-        LogUtil.debug("auth-enhancement 401：uri={}，error={}", request.getRequestURI(), errorCode);
+        String description = jwksUnavailable(authException) ? "jwks_unavailable" : errorCode;
+        LogUtil.debug("auth-enhancement 401：uri={}，error={}", request.getRequestURI(), description);
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader("WWW-Authenticate",
                 errorCode == null ? "Bearer" : "Bearer error=\"" + errorCode + "\"");
         writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
-                "toolbox.auth.unauthorized", "Authentication required or token invalid", errorCode);
+                "toolbox.auth.unauthorized", "Authentication required or token invalid", description);
+    }
+
+    /** 沿 cause 链探测取键失败标记（07 §4.3，R8）；带深度上限防异常链成环。 */
+    private static boolean jwksUnavailable(Throwable failure) {
+        Throwable cur = failure;
+        for (int depth = 0; cur != null && depth < 20; depth++) {
+            if (cur instanceof JwksUnavailableException) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     /** 401/403 共用的 BaseResponse JSON 写出（package-private 供 {@link AuthAccessDeniedHandler} 复用） */

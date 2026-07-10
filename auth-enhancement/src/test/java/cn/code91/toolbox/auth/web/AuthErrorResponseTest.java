@@ -1,6 +1,7 @@
 package cn.code91.toolbox.auth.web;
 
 import cn.code91.facility.web.response.BaseResponse;
+import cn.code91.toolbox.auth.jwt.JwksUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -53,6 +54,29 @@ class AuthErrorResponseTest {
                 .get();
         assertThat(body.getCode()).isEqualTo(401);
         assertThat(body.getDescription()).as("非 OAuth2 异常无错误码").isNull();
+    }
+
+    @Test
+    void jwksUnavailableCauseYieldsDistinctDescription() throws Exception {
+        // R8 观测码（07 §4.3）：取键失败经 JwksUnavailableException 归一化，EntryPoint 沿
+        // cause 链探测 ⇒ description=jwks_unavailable；协议头保持标准 invalid_token 不扩展。
+        var response = new MockHttpServletResponse();
+        var jwksDown = new JwksUnavailableException("Couldn't retrieve remote JWK set",
+                new java.net.ConnectException("connection refused"));
+        new AuthEntryPoint().commence(new MockHttpServletRequest(), response,
+                new OAuth2AuthenticationException(
+                        new OAuth2Error("invalid_token", "取键内因不外泄", null), jwksDown));
+
+        assertThat(response.getStatus()).as("仍是 401（IdP 故障不升 500）").isEqualTo(401);
+        assertThat(response.getHeader("WWW-Authenticate"))
+                .as("协议头恒标准码（RFC 6750 不扩展）").isEqualTo("Bearer error=\"invalid_token\"");
+        BaseResponse<?> body = JsonUtil.deserialize(response.getContentAsString(), BaseResponse.class)
+                .get();
+        assertThat(body.getDescription()).as("description 细分为 jwks_unavailable（R8）")
+                .isEqualTo("jwks_unavailable");
+        assertThat(response.getContentAsString())
+                .as("网络内因不回显（防探测原则，与既有 401/403 钉同则）")
+                .doesNotContain("Couldn't retrieve").doesNotContain("connection refused");
     }
 
     @Test

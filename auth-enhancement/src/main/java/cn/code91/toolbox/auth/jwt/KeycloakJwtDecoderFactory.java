@@ -1,5 +1,6 @@
 package cn.code91.toolbox.auth.jwt;
 
+import cn.code91.facility.log.LogUtil;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
@@ -63,8 +64,10 @@ public final class KeycloakJwtDecoderFactory {
      * {@code JwtAuthenticationProvider} 转的是 {@code AuthenticationServiceException}，未被
      * {@code BearerTokenAuthenticationFilter} 捕获，作为未处理异常向上抛（容器兜底通常 500）。
      * IdP 暂时不可达是运行期常态而非服务端 bug，不得放大为 500——此处把"非 Bad 的 JwtException"
-     * 也统一升格为 BadJwtException，使其复用既有 401 出口；非 JwtException 家族的异常
-     * （真正的内部错误）不受影响，仍按原样向上抛。
+     * 升格为 {@link JwksUnavailableException}（BadJwtException 子类，复用既有 401 出口，且被
+     * {@code AuthEntryPoint} 沿 cause 链探测细分为 {@code jwks_unavailable} 观测码，07 §4.3/R8）
+     * 并打 WARN 单条（R8 运维可见性）；非 JwtException 家族的异常（真正的内部错误）不受影响，
+     * 仍按原样向上抛。
      */
     private static JwtDecoder normalizeDecodeFailures(NimbusJwtDecoder delegate) {
         return token -> {
@@ -73,7 +76,9 @@ public final class KeycloakJwtDecoderFactory {
             } catch (BadJwtException alreadyBad) {
                 throw alreadyBad;
             } catch (JwtException generic) {
-                throw new BadJwtException(generic.getMessage(), generic);
+                LogUtil.warn("auth-enhancement JWKS 取键失败（KC 不可达或响应异常），"
+                        + "本次请求按 401/jwks_unavailable 处理：{}", generic.getMessage());
+                throw new JwksUnavailableException(generic.getMessage(), generic);
             }
         };
     }
