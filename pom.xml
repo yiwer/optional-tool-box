@@ -15,6 +15,7 @@
         <module>compare-enhancement</module>
         <module>storage-enhancement</module>
         <module>mail-enhancement</module>
+        <module>docs-enhancement</module>
     </modules>
 
     <properties>
@@ -36,6 +37,14 @@
         <!-- server-facility 自身将 tika-core 声明为 optional（不透传）；storage-enhancement 的
              上传守卫直接使用 MimeTyping（内部依赖 Tika），版本对齐 server-facility 实测所用版本。 -->
         <tika.version>3.2.3</tika.version>
+        <!-- docs-enhancement 的 springdoc 底座（M5 裁定 F）：落地实测 Maven Central 最新 2.8.x GA
+             为 2.8.17（其父 pom 即 spring-boot-starter-parent 3.5.13，与本仓库 Boot 3.5.10 同线兼容），
+             高于计划初值 2.8.9，按裁定取用；3.0.x 已发布但属新大版本线，不跨线。 -->
+        <springdoc.version>2.8.17</springdoc.version>
+        <!-- docs-enhancement 字节码直接引用 swagger 类型（ModelConverter/OpenAPI 模型等），
+             依赖账目守卫要求显式声明；版本对齐 springdoc-openapi 2.8.17 自身声明的
+             swagger-api.version（2.2.47），避免与 springdoc 传递版本漂移。 -->
+        <swagger-core.version>2.2.47</swagger-core.version>
         <!-- auth-enhancement 真 Keycloak 集成测试（test-only）；Boot BOM 不管理 com.github.dasniko，
              4.1.1 默认对齐 Keycloak 26.5（其传递的 keycloak-admin-client 仅 test 作用域，
              不构成运行时 KC 依赖，07 §7）。 -->
@@ -146,6 +155,36 @@
                 <groupId>org.wiremock</groupId>
                 <artifactId>wiremock</artifactId>
                 <version>${wiremock.version}</version>
+            </dependency>
+            <!-- springdoc 三构件（M5 裁定 F）：common 与 webmvc-api 为 docs-enhancement 的 optional
+                 直接依赖；webmvc-ui 模块自身不声明（消费方按需引入 swagger-ui 时版本仍收口于此）。 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-common</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <!-- swagger 两构件：docs-enhancement 字节码直接引用（io.swagger.v3.oas.models.* 的 OpenAPI
+                 模型、io.swagger.v3.core.converter/jackson 的 ModelConverter/TypeNameResolver），
+                 依赖账目守卫要求显式声明；版本对齐 springdoc ${springdoc.version} 的传递版本。 -->
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-models-jakarta</artifactId>
+                <version>${swagger-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-core-jakarta</artifactId>
+                <version>${swagger-core.version}</version>
             </dependency>
             <dependency>
                 <!-- 实测踩坑：裸 org.wiremock:wiremock 的 Maven POM 声明的部分 Jetty 传递依赖坐标

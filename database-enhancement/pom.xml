@@ -16,6 +16,13 @@
             <groupId>cn.code91</groupId>
             <artifactId>server-facility</artifactId>
         </dependency>
+        <!-- PgJsonbHandler 存储保真修复后直接使用 JsonConfig.canonical().includeAlways().build()，
+             其返回类型 ObjectMapper（jackson-databind）进入本模块字节码；此前仅经 server-facility
+             传递引入，依赖账目守卫要求直接使用必须显式声明（版本由 Boot BOM 管理，同 docs 模块先例）。 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
