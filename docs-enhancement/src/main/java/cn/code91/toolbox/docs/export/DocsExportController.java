@@ -11,11 +11,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.nio.charset.StandardCharsets;
 
@@ -35,29 +33,39 @@ public class DocsExportController {
         this.exporter = exporter;
     }
 
+    /**
+     * 参数姿势两处实测因果：① {@code @RequestParam} 显式写参数名——本仓库编译不开
+     * {@code -parameters}，库 jar 不依赖编译器旗标恢复形参名，缺名时参数解析直接 IAE；
+     * ② {@code format} 收 String 手工解析——Spring MVC 对枚举请求参数的默认转换大小写敏感
+     * （Boot 的宽松枚举转换只作用于配置绑定，不作用于 MVC），{@code format=yaml} 会直接
+     * 绑定失败；手工解析给出大小写不敏感语义与确定的 400 + {@code BaseResponse} 形态
+     * （裁定 E，集成测试钉住）。
+     */
     @GetMapping(PATH)
-    public ResponseEntity<?> export(@RequestParam(required = false) String group,
-                                    @RequestParam(defaultValue = "json") ExportFormat format) {
-        Result<byte[], DocsError> result = exporter.export(group, format);
+    public ResponseEntity<?> export(@RequestParam(name = "group", required = false) String group,
+                                    @RequestParam(name = "format", defaultValue = "json") String format) {
+        ExportFormat exportFormat = parseFormat(format);
+        if (exportFormat == null) {
+            return ResponseEntity.badRequest().body(BaseResponse.err(400,
+                    "非法的 format 参数值：" + format + "（仅支持 json/yaml/postman，大小写不敏感）"));
+        }
+        Result<byte[], DocsError> result = exporter.export(group, exportFormat);
         return switch (result) {
             case Result.Ok<byte[], DocsError>(byte[] bytes) -> ResponseEntity.ok()
-                    .contentType(contentTypeOf(format))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, attachmentOf(group, format))
+                    .contentType(contentTypeOf(exportFormat))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, attachmentOf(group, exportFormat))
                     .body(bytes);
             case Result.Err<byte[], DocsError>(ExportFailed(String message)) ->
                     ResponseEntity.status(HttpStatus.NOT_FOUND).body(BaseResponse.err(404, message));
         };
     }
 
-    /**
-     * {@code format} 非法值时 Spring 枚举绑定失败抛本异常；收敛为 400 + {@code BaseResponse}
-     * 错误形状（裁定 E，集成测试钉住实际形态）。{@code @ExceptionHandler} 只作用于本控制器，
-     * 不影响应用全局异常处理。
-     */
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    ResponseEntity<BaseResponse<Void>> onBindingFailure(MethodArgumentTypeMismatchException ex) {
-        return ResponseEntity.badRequest().body(BaseResponse.err(400,
-                "非法的请求参数值：" + ex.getValue() + "（format 仅支持 json/yaml/postman）"));
+    private static ExportFormat parseFormat(String format) {
+        try {
+            return ExportFormat.valueOf(format.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private static MediaType contentTypeOf(ExportFormat format) {

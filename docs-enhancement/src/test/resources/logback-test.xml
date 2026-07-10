@@ -15,7 +15,29 @@
     -->
     <logger name="cn.code91.facility.json" level="OFF"/>
 
-    <root level="INFO">
+    <!--
+      装配矩阵的负路径（security-scheme type 非法 fail-fast）刻意让 WebApplicationContextRunner
+      的上下文刷新失败以断言启动期拦截；Spring 对此固定打 cancelling refresh attempt WARN，
+      属预期行为，测试作用域内收敛（同 mail/llm 先例）。
+    -->
+    <logger name="org.springframework.boot.web.servlet.context.AnnotationConfigServletWebApplicationContext"
+            level="ERROR"/>
+
+    <!--
+      集成测试内嵌应用会触发 server-facility 与 springdoc 的固定环境提示 WARN（cache 无
+      Caffeine 回退、多上下文重复注入 ContextHolder、springdoc api-docs 默认开启提示），
+      均为测试环境的预期行为而非本模块缺陷，测试作用域内收敛。
+    -->
+    <logger name="cn.code91.facility.autoconfigure" level="ERROR"/>
+    <logger name="cn.code91.facility.context.SpringContextHolder" level="ERROR"/>
+    <logger name="org.springdoc.core.events.SpringDocAppInitializer" level="ERROR"/>
+
+    <!--
+      root 取 WARN：集成测试内嵌 Tomcat/Spring Boot 启动 INFO 日志冗长（本仓库首个内嵌容器
+      测试），收敛到 WARN 保持 mvn verify 输出干净；本模块的泄漏/命名冲突告警为 WARN 级，
+      OutputCaptureExtension 断言不受影响。
+    -->
+    <root level="WARN">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>

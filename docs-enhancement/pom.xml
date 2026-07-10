@@ -133,6 +133,14 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 集成测试内嵌 Tomcat（本仓库首个启动内嵌 Web 容器的测试，裁定 F：test scope）。
+             optional 的 springdoc 依赖在模块自身 test classpath 本就可见（optional 只影响传递），
+             IT 无需重复声明。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>
