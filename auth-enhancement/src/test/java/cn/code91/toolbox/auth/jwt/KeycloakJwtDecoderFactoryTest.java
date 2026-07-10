@@ -32,13 +32,14 @@ class KeycloakJwtDecoderFactoryTest {
         JwtDecoder decoder = KeycloakJwtDecoderFactory.create(
                 "http://kc.internal:8080", "r", "https://kc.public.example/realms/r",
                 "toolbox-api", Duration.ofSeconds(30), List.of("RS256", "ES256"));
-        assertThat(decoder).isNotNull();
+        assertThat(decoder).as("issuer 覆写 + audience + 多算法组合同样离线可构建").isNotNull();
     }
 
     @Test
     void propagatesConfigErrors() {
         assertThatThrownBy(() -> KeycloakJwtDecoderFactory.create(
                 null, "r", null, null, Duration.ofSeconds(60), List.of("RS256")))
+                .as("缺 server-url 经 KeycloakEndpoints 传导 fail-fast（R5）")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("toolbox.auth.keycloak.server-url");
         assertThatThrownBy(() -> KeycloakJwtDecoderFactory.create(

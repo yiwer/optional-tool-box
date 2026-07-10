@@ -44,7 +44,8 @@ class KeycloakClaimsTest {
         assertThat(KeycloakClaims.clientRoles(jwt))
                 .as("resource_access 全 client（07 §4.1：CurrentUser 不受映射白名单限制）")
                 .containsOnlyKeys("toolbox-api", "account");
-        assertThat(KeycloakClaims.clientRoles(jwt).get("toolbox-api")).containsExactly("doc-reader");
+        assertThat(KeycloakClaims.clientRoles(jwt).get("toolbox-api"))
+                .as("client 角色集内容如实读出").containsExactly("doc-reader");
         assertThat(KeycloakClaims.scopes(jwt))
                 .as("scope 空格分隔").containsExactlyInAnyOrder("openid", "profile", "email");
     }
@@ -65,7 +66,8 @@ class KeycloakClaimsTest {
                 .claim("scope", 42)
                 .build();
         assertThat(KeycloakClaims.realmRoles(weird)).as("结构畸形不抛，按缺失处理").isEmpty();
-        assertThat(KeycloakClaims.clientRoles(weird)).isEmpty();
-        assertThat(KeycloakClaims.scopes(weird)).isEmpty();
+        assertThat(KeycloakClaims.clientRoles(weird))
+                .as("resource_access 值畸形（非 Map/roles 非 List）按缺失处理").isEmpty();
+        assertThat(KeycloakClaims.scopes(weird)).as("scope 非字符串按缺失处理").isEmpty();
     }
 }

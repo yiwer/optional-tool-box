@@ -89,8 +89,8 @@ class AuthContextTest {
                 .orElseThrow(() -> new AssertionError("null 值 claim 不得使适配失败（07 §3 常态而非错误）"));
         assertThat(user.rawClaims()).as("null 值 claim 视同缺失剔除").doesNotContainKey("custom_nullable");
         assertThat(AuthContext.hasRole(null)).as("null 角色名恒 false 而非 NPE").isFalse();
-        assertThat(AuthContext.hasClientRole(null, "r")).isFalse();
-        assertThat(AuthContext.hasClientRole("c", null)).isFalse();
+        assertThat(AuthContext.hasClientRole(null, "r")).as("null clientId 恒 false 而非 NPE").isFalse();
+        assertThat(AuthContext.hasClientRole("c", null)).as("null 角色名恒 false 而非 NPE").isFalse();
     }
 
     @Test

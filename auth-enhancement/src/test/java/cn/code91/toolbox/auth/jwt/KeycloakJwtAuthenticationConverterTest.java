@@ -59,6 +59,7 @@ class KeycloakJwtAuthenticationConverterTest {
     void realmRolesCanBeDisabled() {
         var converter = new KeycloakJwtAuthenticationConverter(false, List.of(), true, "preferred_username");
         assertThat(authorityNames(converter.convert(kcJwt())))
+                .as("map-realm-roles=false：realm 角色不映射，仅剩 SCOPE_（07 §4.2）")
                 .containsExactlyInAnyOrder("SCOPE_openid", "SCOPE_profile");
     }
 

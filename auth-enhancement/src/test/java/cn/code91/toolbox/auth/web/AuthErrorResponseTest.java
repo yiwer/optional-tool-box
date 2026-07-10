@@ -61,12 +61,13 @@ class AuthErrorResponseTest {
         new AuthAccessDeniedHandler().handle(new MockHttpServletRequest(), response,
                 new AccessDeniedException("拒绝内因不外泄"));
 
-        assertThat(response.getStatus()).isEqualTo(403);
-        assertThat(response.getHeader("WWW-Authenticate")).isEqualTo("Bearer error=\"insufficient_scope\"");
+        assertThat(response.getStatus()).as("403 Forbidden 状态").isEqualTo(403);
+        assertThat(response.getHeader("WWW-Authenticate"))
+                .as("RFC 6750 头带 insufficient_scope 错误码").isEqualTo("Bearer error=\"insufficient_scope\"");
         BaseResponse<?> body = JsonUtil.deserialize(response.getContentAsString(), BaseResponse.class)
                 .get();
-        assertThat(body.getCode()).isEqualTo(403);
-        assertThat(body.getDescription()).isEqualTo("insufficient_scope");
+        assertThat(body.getCode()).as("BaseResponse.code 与 HTTP 状态一致").isEqualTo(403);
+        assertThat(body.getDescription()).as("description 只带错误码（与 401 侧同则）").isEqualTo("insufficient_scope");
         assertThat(response.getContentAsString())
                 .as("403 侧同样不回显异常内因（07 §4.3 防探测，与 401 侧对称）").doesNotContain("拒绝内因不外泄");
     }
