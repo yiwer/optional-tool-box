@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.DefaultSecurityFilterChain;
@@ -130,15 +131,17 @@ class ToolboxAuthAutoConfigurationTest {
                 .withPropertyValues("toolbox.auth.security-chain.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    // 子开关只管本模块的链 bean；测试 runner 为取 HttpSecurity 原型叠加了
+                    // 子开关只管本模块的链翼；测试 runner 为取 HttpSecurity 原型叠加了
                     // SecurityAutoConfiguration，此时无人认领 SecurityFilterChain 插槽，
                     // Boot 官方 defaultSecurityFilterChain 按其自身 @ConditionalOnMissingBean
-                    // 语义正常补位——这是真实 Boot 退让语义，不是本模块的产物，故断言本模块专属
-                    // bean 名缺席，不断言"全局零 SecurityFilterChain"（07 §5.3：关掉后期望消费方
-                    // 自己写链，若消费方也不写，Boot 默认链兜底是标准行为)。
-                    assertThat(context).as("Seam 1 子开关：本模块专属链 bean 不存在")
-                            .doesNotHaveBean("toolboxAuthSecurityFilterChain");
-                    assertThat(context).hasSingleBean(JwtDecoder.class);
+                    // 语义正常补位——这是真实 Boot 退让语义，不是本模块的产物，故不断言
+                    // "全局零 SecurityFilterChain"，而以嵌套配置类缺席断言"模块链翼整体不激活"
+                    // （类引用抗重构，P1 账本 T5 Minor：字符串 bean 名断言在 bean 方法改名后
+                    // doesNotHaveBean(不存在的名) 恒真、静默空过）。
+                    assertThat(context).as("Seam 1 子开关：模块链配置整体不激活")
+                            .doesNotHaveBean(ToolboxAuthAutoConfiguration.SecurityChainConfiguration.class);
+                    assertThat(context).as("decoder/converter 保留（07 §5.3 关链不关件）")
+                            .hasSingleBean(JwtDecoder.class);
                     assertThat(context).hasSingleBean(KeycloakJwtAuthenticationConverter.class);
                 });
     }
@@ -167,6 +170,21 @@ class ToolboxAuthAutoConfigurationTest {
                 .withPropertyValues("toolbox.auth.method-security.enabled=false")
                 .run(context -> assertThat(context)
                         .doesNotHaveBean(ToolboxAuthAutoConfiguration.MethodSecurityConfiguration.class));
+    }
+
+    @Test
+    void duplicateEnableMethodSecurityDeclarationIsIdempotent() {
+        // 07 §10 幂等钉（P1 账本 T5 Minor/终审 #10）：消费方自行 @EnableMethodSecurity 时与
+        // 模块 MethodSecurityConfiguration 构成双重声明——@Import 的基础设施配置类按类去重、
+        // 同名基础设施 bean 覆盖注册，装配不得冲突失败。该假设依赖 Spring Security 装配内部
+        // 行为，升级大版本前以本钉复核（07 §10 触发条件）。
+        webRunner.withPropertyValues(MINIMAL)
+                .withUserConfiguration(UserMethodSecurityConfig.class)
+                .run(context -> {
+                    assertThat(context).as("双重 @EnableMethodSecurity 装配不失败（幂等）").hasNotFailed();
+                    assertThat(context).as("模块侧 method-security 配置仍在场（开关语义不受用户重复声明影响）")
+                            .hasSingleBean(ToolboxAuthAutoConfiguration.MethodSecurityConfiguration.class);
+                });
     }
 
     @Test
@@ -225,5 +243,10 @@ class ToolboxAuthAutoConfigurationTest {
         KeycloakJwtAuthenticationConverter userConverter() {
             return converter;
         }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableMethodSecurity
+    static class UserMethodSecurityConfig {
     }
 }
