@@ -41,6 +41,9 @@ class PgHandlerRoundTripIT extends AbstractPostgresIntegrationTest {
     record Point(int x, int y) {
     }
 
+    record AuditEntry(String action, java.util.Map<String, String> fieldChanges, java.util.List<String> tags) {
+    }
+
     private static Connection connection;
 
     @BeforeAll
@@ -95,6 +98,32 @@ class PgHandlerRoundTripIT extends AbstractPostgresIntegrationTest {
             try (ResultSet rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 assertThat(handler.read(rs, 1)).isEqualTo(original);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("jsonb: 空集合字段真库往返保真（回归：canonical NON_EMPTY 曾使空 field_changes 落库变 {}、回读变 null）")
+    void jsonbEmptyCollectionsRoundTrip() throws SQLException {
+        PgJsonbHandler<AuditEntry> handler = new PgJsonbHandler<>(AuditEntry.class);
+        AuditEntry original = new AuditEntry("UPDATE", java.util.Map.of(), java.util.List.of());
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO pg_handler_roundtrip (id, jsonb_col) VALUES (?, ?)")) {
+            ps.setInt(1, 8);
+            bindWriteResult(ps, 2, handler.write(original));
+            ps.executeUpdate();
+        }
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT jsonb_col FROM pg_handler_roundtrip WHERE id = ?")) {
+            ps.setInt(1, 8);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                AuditEntry readBack = handler.read(rs, 1);
+                assertThat(readBack).isEqualTo(original);
+                assertThat(readBack.fieldChanges()).isNotNull().isEmpty();
+                assertThat(readBack.tags()).isNotNull().isEmpty();
             }
         }
     }

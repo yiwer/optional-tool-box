@@ -6,6 +6,8 @@ import org.postgresql.util.PGobject;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -20,6 +22,10 @@ import static org.mockito.Mockito.when;
 class PgJsonbHandlerTest {
 
     record Point(int x, int y) {
+    }
+
+    /** 模拟审计场景：含集合/Map 字段的 jsonb 载荷（空集合回归的最小夹具）。 */
+    record AuditEntry(String action, Map<String, String> fieldChanges, List<String> tags) {
     }
 
     @Test
@@ -57,6 +63,36 @@ class PgJsonbHandlerTest {
         when(rs.getString(1)).thenReturn("{\"x\":3,\"y\":4}");
 
         assertThat(handler.read(rs, 1)).isEqualTo(new Point(3, 4));
+    }
+
+    @Test
+    @DisplayName("write: 空集合/空 Map 字段不得丢失（回归：canonical NON_EMPTY 曾把空 field_changes 整键丢掉）")
+    void writePreservesEmptyCollectionFields() throws SQLException {
+        PgJsonbHandler<AuditEntry> handler = new PgJsonbHandler<>(AuditEntry.class);
+
+        PGobject written = (PGobject) handler.write(new AuditEntry("UPDATE", Map.of(), List.of()));
+
+        // 键按字母序（canonical 保留 sortProperties），空集合必须显式落库为 {} / []，
+        // 否则回读时缺键 → 字段为 null，空/null 语义丢失。
+        assertThat(written.getValue())
+                .isEqualTo("{\"action\":\"UPDATE\",\"fieldChanges\":{},\"tags\":[]}");
+    }
+
+    @Test
+    @DisplayName("write→read 往返：空集合字段读回仍是空集合而非 null")
+    void writeReadRoundTripPreservesEmptyCollections() throws SQLException {
+        PgJsonbHandler<AuditEntry> handler = new PgJsonbHandler<>(AuditEntry.class);
+        AuditEntry original = new AuditEntry("UPDATE", Map.of(), List.of());
+
+        PGobject written = (PGobject) handler.write(original);
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString(1)).thenReturn(written.getValue());
+
+        AuditEntry readBack = handler.read(rs, 1);
+
+        assertThat(readBack).as("空集合字段经落库往返后必须保真（不得退化为 null）").isEqualTo(original);
+        assertThat(readBack.fieldChanges()).isNotNull().isEmpty();
+        assertThat(readBack.tags()).isNotNull().isEmpty();
     }
 
     @Test
