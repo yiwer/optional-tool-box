@@ -70,6 +70,13 @@
             <artifactId>springdoc-openapi-starter-common</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- SpringdocDocsExporter 直接引用 OpenApiWebMvcResource/MultipleOpenApiWebMvcResource
+             （位于 webmvc-api），导出即复用 springdoc 的 spec 生成端点方法，不重造生成器。 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- schema 定制器直接引用 swagger 类型（io.swagger.v3.oas.models.* 模型位于
              swagger-models-jakarta；ModelConverter/TypeNameResolver 位于 swagger-core-jakarta），
              版本在父 pom pin、对齐 springdoc 传递版本（裁定 F）。 -->
@@ -116,6 +123,14 @@
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- SpringdocDocsExporterTest 直接使用 Mockito 静态 API 桩化 springdoc 资源类
+             （真实构造需 springdoc 全套服务对象，桩化成本最低），此前仅靠
+             spring-boot-starter-test 传递引入（同 storage 先例）。 -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

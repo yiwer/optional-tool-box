@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      facility Jsons.parseTree 对不合法 JSON 走 LogUtil.warn（含异常栈）；
+      PostmanCollectionWriterTest 的非法 JSON 分支刻意触发以覆盖收敛路径，属预期行为而非缺陷，
+      测试作用域内调至 OFF 避免堆栈噪音污染 mvn verify 输出（同 compare/llm 先例）。
+      注意：本模块自身包（cn.code91.toolbox.docs）不降噪——泄漏检测/命名冲突的 WARN 是
+      测试断言目标（OutputCaptureExtension），必须保持可见。
+    -->
+    <logger name="cn.code91.facility.json" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
