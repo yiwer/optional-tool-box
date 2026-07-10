@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- WireMock 内嵌 Jetty 12 服务器的启停日志较冗长（全链矩阵静态单例起一次仍打十余行），
+         测试作用域内收敛到 WARN。WireMock 内部使用了已弃用的 Jetty CrossOriginFilter，Jetty
+         对此固定打 WARN（第三方库内部实现细节，非本模块缺陷），进一步收敛到 ERROR
+         （同 llm 模块先例）。 -->
+    <logger name="com.github.tomakehurst.wiremock" level="WARN"/>
+    <logger name="org.wiremock" level="WARN"/>
+    <logger name="org.eclipse.jetty" level="WARN"/>
+    <logger name="org.eclipse.jetty.util.DeprecationWarning" level="ERROR"/>
+
+    <!--
+      装配矩阵的负路径（缺 server-url/realm R5 fail-fast）刻意让 WebApplicationContextRunner
+      的上下文刷新失败以断言启动期拦截；该 runner 的 servlet 上下文实现对此固定打
+      "cancelling refresh attempt" WARN，属预期行为，测试作用域内收敛（同 llm/mail 模块对
+      AnnotationConfigApplicationContext 的降噪先例，此处为 servlet 变体）。
+    -->
+    <logger name="org.springframework.boot.web.servlet.context.AnnotationConfigServletWebApplicationContext" level="ERROR"/>
+
+    <!--
+      全链矩阵宿主（@SpringBootTest）拉起完整 facility 自动装配：cache 面无 Caffeine 时的
+      降级提示 WARN、同 JVM 第二个测试上下文触发的 SpringContextHolder "duplicate injection"
+      WARN，均为测试环境的预期产物而非本模块缺陷，测试作用域内收敛避免噪音污染 mvn 输出；
+      生产作用域不受影响。
+    -->
+    <logger name="cn.code91.facility.autoconfigure.FacilityCacheAutoConfiguration" level="ERROR"/>
+    <logger name="cn.code91.facility.context.SpringContextHolder" level="ERROR"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
