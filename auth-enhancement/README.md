@@ -46,6 +46,8 @@ public BaseResponse<List<Order>> list() {
 不引 `spring-boot-starter-oauth2-resource-server`（L1 缺类不装配）或设
 `toolbox.auth.enabled=false`（L2），本模块整体不装配，应用不受影响。
 
+⚠️ 注意：缺引擎类的退出态是**无任何鉴权保护（fail-open）**，不是降级——依赖重构时若 starter 被意外 exclude，应用会静默裸奔。`enabled=false` / `security-chain.enabled=false` 两种退出态则落到 Boot 默认链（fail-closed），性质不同。
+
 ## 配置速查（`toolbox.auth.*`）
 
 | 键 | 默认值 | 说明 |

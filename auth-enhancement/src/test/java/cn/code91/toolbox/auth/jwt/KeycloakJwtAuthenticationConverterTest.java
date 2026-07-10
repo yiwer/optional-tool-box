@@ -80,4 +80,21 @@ class KeycloakJwtAuthenticationConverterTest {
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
         assertThat(converter.convert(bare).getAuthorities()).as("缺全部 claim 空安全").isEmpty();
     }
+
+    @Test
+    void sameRoleNameAcrossWhitelistedClientsMergesToSingleAuthority() {
+        // 终审修复回归钉（07 §4.2 披露语义，f52d21f 先例：披露即应钉）：两个白名单 client
+        // 携带同名角色，扁平化后合并为单一 ROLE_ authority——需要区分时业务改用
+        // AuthContext.hasClientRole(client, role)（读原始结构，无此歧义）。
+        var converter = new KeycloakJwtAuthenticationConverter(false, List.of("api-a", "api-b"), false, "preferred_username");
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("s")
+                .claim("resource_access", Map.of(
+                        "api-a", Map.of("roles", List.of("viewer")),
+                        "api-b", Map.of("roles", List.of("viewer"))))
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(converter.convert(jwt).getAuthorities())
+                .as("跨 client 重名角色合并为单一 authority（07 §4.2 坦诚披露的语义）")
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_viewer");
+    }
 }

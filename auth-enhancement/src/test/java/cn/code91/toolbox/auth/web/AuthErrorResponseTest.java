@@ -59,7 +59,7 @@ class AuthErrorResponseTest {
     void forbiddenShape() throws Exception {
         var response = new MockHttpServletResponse();
         new AuthAccessDeniedHandler().handle(new MockHttpServletRequest(), response,
-                new AccessDeniedException("denied"));
+                new AccessDeniedException("拒绝内因不外泄"));
 
         assertThat(response.getStatus()).isEqualTo(403);
         assertThat(response.getHeader("WWW-Authenticate")).isEqualTo("Bearer error=\"insufficient_scope\"");
@@ -67,5 +67,7 @@ class AuthErrorResponseTest {
                 .get();
         assertThat(body.getCode()).isEqualTo(403);
         assertThat(body.getDescription()).isEqualTo("insufficient_scope");
+        assertThat(response.getContentAsString())
+                .as("403 侧同样不回显异常内因（07 §4.3 防探测，与 401 侧对称）").doesNotContain("拒绝内因不外泄");
     }
 }

@@ -254,7 +254,7 @@ toolbox:
 |---|---|---|
 | compile | server-facility、spring-boot-autoconfigure、spring-boot、spring-context、spring-beans、spring-core | 房内标准六件 |
 | optional | `spring-boot-starter-oauth2-resource-server`（交付物标记，analyze 豁免注释同 starter-mail 先例）；实际内容件：spring-security-config / spring-security-core / spring-security-web / spring-security-oauth2-core / spring-security-oauth2-resource-server / spring-security-oauth2-jose；jakarta.servlet-api（web 翼直接使用）；**实施修正（Task 5 实证）**：spring-web（装配层链代码编译期签名解析——`requestMatchers` 重载消歧 + `AuthorizationFilter` 父类解析，字节码无直接引用，同 jakarta.servlet-api 编译面依赖模式） | 全部 Boot BOM 管理，**零新增运行时 pin**；缺类时 L1 兜住 |
-| test | starter-test 聚合 + spring-boot-test + junit-jupiter-api + assertj（房内标准）；spring-security-test（`jwt()` post-processor）；spring-boot-starter-web（MockMvc 全链）；wiremock（假 JWKS）；nimbus-jose-jwt（测试铸 token，显式声明——运行期经 oauth2-jose 传递但 optional 不透传）；testcontainers junit-jupiter + **com.github.dasniko:testcontainers-keycloak 4.1.1**；archunit 两件；logback 两件 + slf4j（日志钉测试） | — |
+| test | starter-test 聚合 + spring-boot-test + junit-jupiter-api + assertj（房内标准）；spring-boot-test-autoconfigure / spring-test（显式声明，analyze 账目）；spring-boot-starter-web（MockMvc 全链）；wiremock（假 JWKS）；nimbus-jose-jwt（测试铸 token，显式声明——运行期经 oauth2-jose 传递但 optional 不透传）；testcontainers junit-jupiter + **com.github.dasniko:testcontainers-keycloak 4.1.1**；archunit 两件；logback 两件 + slf4j（日志钉测试）（终审修正：对齐 240b8ea analyze 收敛后的最终 pom） | — |
 
 **父 pom 改动（实施修正，Task 1 实证，列全三条 test 件 pin）**：`<module>auth-enhancement</module>` + 三条版本 pin——① `testcontainers-keycloak.version=4.1.1`（Boot BOM 不管理 `com.github.dasniko`，注释风格同 greenmail/wiremock 先例；其传递的 keycloak-admin-client 26.0.8 仅 test 作用域，不构成运行时 KC 依赖）；② `nimbus-jose-jwt.version=9.37.4`（Boot BOM 与 spring-security-bom 均不管理该坐标，测试代码直接使用其 API 铸 token，版本对齐 oauth2-jose 自身声明的传递版本）；③ `wiremock-jetty12` 复用 llm-enhancement 已声明的既有 `wiremock.version`，**无新增 pin**。
 
@@ -308,5 +308,6 @@ jacoco 门禁沿用父 pom 80/80/70。
 | P2 | 多 issuer / 多 realm（`JwtIssuerAuthenticationManagerResolver` + 配置 registry 化） | 多租户/多环境共存需求 |
 | P2 | token relay（收到的用户 token 透传下游） | 网关/编排场景 |
 | P2 | **实施修正（Task 6 实证补件，§5.4/§4.3 呼应）**：`jwks_unavailable` 与 `invalid_token` 拆分为独立观测码（当前统一归一化为 401/`invalid_token`，见 §5.4）；`@EnableMethodSecurity` 双重声明幂等行为（消费方已自行声明时的覆盖注册语义）补专项回归钉 | 需要更细粒度 IdP 故障可观测性时；升级 Spring Security 大版本前复核该幂等假设 |
+| P2 | 运行期 fail-open 探测（L1 缺引擎类但检测到 toolbox.auth.* 配置时启动 WARN）；测试债归并（断言补 .as()、工厂默认回落分支、桥接异常路径清理钉、chainSubSwitch 断言抗重构化） | 终审归并（2026-07-10） |
 | P3+ | opaque token introspection（KC lightweight access token 场景）、WebFlux 支持 | 明确业务出现 |
 | 独立评估 | Keycloak Admin Client（身份管理域，非鉴权域） | 管理后台程序化建户需求出现时，评估独立模块 |

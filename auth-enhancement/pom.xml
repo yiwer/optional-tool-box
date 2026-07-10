@@ -33,7 +33,7 @@
             <artifactId>spring-context</artifactId>
         </dependency>
         <!-- Task 7 analyze 实测修正（compile-face，同 spring-web 编译面依赖模式）：
-             ToolboxAuthMessageSource() 构造 ResourceBundleMessageSource 并调用 setBasename 等方法，
+             toolboxAuthMessageSource() 构造 ResourceBundleMessageSource 并调用 setBasename 等方法，
              该类实现 org.springframework.beans.factory.BeanClassLoaderAware（spring-beans 包）——
              javac 解析其类型层级需要 spring-beans 在编译类路径，但字节码不留直接引用（未显式
              cast/mention 该接口），dependency:analyze 判"仅 test 字节码引用"（@Autowired 字段注入）。
