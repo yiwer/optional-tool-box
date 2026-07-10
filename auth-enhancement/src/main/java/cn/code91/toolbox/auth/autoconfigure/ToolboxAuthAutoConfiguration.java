@@ -29,8 +29,10 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 /**
  * auth-enhancement 唯一装配入口（07 §5）。条件分层：L1 探测 oauth2-jose 在场 + Servlet 环境；
- * L2 总开关默认开；L4 Seam 三级——整链（主 Seam）/decoder/converter 任一用户 bean 即退让
- * （07 §5.3）。{@code before} 三个 Boot 官方装配构成退让链：本装配的 {@code JwtDecoder} 使
+ * L2 总开关默认开；L4 Seam 四级——整链（主 Seam）/decoder/converter/{@link
+ * cn.code91.toolbox.auth.web.SecurityExceptionAdvice} 任一用户 bean 即退让（各自
+ * {@code @ConditionalOnMissingBean}，07 §5.3；第四点为 Task 6 实证补件）。{@code before}
+ * 三个 Boot 官方装配构成退让链：本装配的 {@code JwtDecoder} 使
  * {@code OAuth2ResourceServerAutoConfiguration} 与 {@code UserDetailsServiceAutoConfiguration}
  * 退让，{@code SecurityFilterChain} 使默认 form-login 链退让。R5 fail-fast 由
  * {@code KeycloakJwtDecoderFactory}（经 {@code KeycloakEndpoints}）在 bean 构造期完成——
