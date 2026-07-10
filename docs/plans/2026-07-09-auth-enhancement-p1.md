@@ -226,10 +226,15 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
             <artifactId>spring-boot-starter-web</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Task 5 实施实测修正（原 test scope）：装配层链代码的编译期签名解析需要 spring-web——
+             requestMatchers 重载消歧触 HttpMethod、AuthorizationFilter extends GenericFilterBean
+             （javap 核验字节码不含直接引用，纯编译面）；消费方 servlet 应用经 starter-web 必有，
+             故与 security 系可选件同型 optional 声明；web 包实现类仍不引 spring-web（07 §4.3
+             约束的对象是实现类，SessionUserBridgeFilter 保持 jakarta Filter）。 -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>
-            <scope>test</scope>
+            <optional>true</optional>
         </dependency>
         <!-- 假 JWKS 端点（07 §9 无 Docker 主矩阵）；jetty12 变体经 ServiceLoader 装配，
              同 llm 先例（其 pom 注释详述）。 -->
@@ -305,6 +310,11 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
                                 <!-- starter-web（test）：为测试宿主提供 MVC+内嵌容器聚合，测试字节码
                                      直接引用的是 spring-web/spring-test（已另行声明）。 -->
                                 <ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+                                <!-- spring-web：装配层链代码纯编译期签名解析需求（HttpMethod 重载消歧 +
+                                     AuthorizationFilter 父类 GenericFilterBean），字节码无直接引用，
+                                     analyze 天然看不到——同 jakarta.servlet-api 编译面依赖豁免模式
+                                     （Task 5 实测修正）。 -->
+                                <ignoredUnusedDeclaredDependency>org.springframework:spring-web</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
                         </configuration>
                     </execution>
