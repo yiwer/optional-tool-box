@@ -1,6 +1,6 @@
 # optional-tool-box
 
-server-facility 脚手架的**可选功能工具箱**：五个相互独立、按需引入、自动装配的增强模块。引入哪个模块，哪个能力就生效；不引入则完全不存在。
+server-facility 脚手架的**可选功能工具箱**：七个相互独立、按需引入、自动装配的增强模块。引入哪个模块，哪个能力就生效；不引入则完全不存在。
 
 | 模块 | 定位 | 状态 |
 |---|---|---|
@@ -9,6 +9,8 @@ server-facility 脚手架的**可选功能工具箱**：五个相互独立、按
 | [llm-enhancement](docs/design/03-llm-enhancement.md) | 大模型接入：多模型注册表、OpenAI 兼容适配、结构化输出 | 设计中 |
 | [mail-enhancement](docs/design/04-mail-enhancement.md) | 邮件派发：多账号、模板、非生产沙箱防误发 | 设计中 |
 | [storage-enhancement](docs/design/05-storage-enhancement.md) | 对象存储统一抽象：OSS / S3 兼容 / 本地三 adapter | 设计中 |
+| [docs-enhancement](docs/design/06-docs-enhancement.md) | API 接口文档：springdoc 薄封装、配置驱动分组、契约感知（`Result` 泄漏检测/schema 命名/错误形状） | 设计中 |
+| [auth-enhancement](docs/design/07-auth-enhancement.md) | Keycloak 资源服务器鉴权：JWT 校验、角色映射、开箱安全链 | 设计中 |
 
 ## 文档
 

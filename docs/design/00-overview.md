@@ -9,7 +9,7 @@
 
 **server-facility** 是"每个服务都必须带"的基座库：单模块 jar，提供 `Result<T,E>` 显式错误通道、错误码体系、日志/脱敏/JSON/i18n 门面、Web 基建（traceId、访问日志、全局异常、统一响应）、缓存/锁/限流/幂等等横切能力。
 
-**optional-tool-box** 是"按需引入"的可选能力层：五个相互独立的增强模块，业务项目引入哪个，哪个的能力就自动装配生效；不引入则完全不存在。
+**optional-tool-box** 是"按需引入"的可选能力层：七个相互独立的增强模块，业务项目引入哪个，哪个的能力就自动装配生效；不引入则完全不存在。
 
 ```
 业务应用
@@ -19,7 +19,9 @@
               ├─ database-enhancement   数据库增强（SQL 观测、轻量 CRUD、审计填充）
               ├─ llm-enhancement        大模型接入（多模型注册、结构化输出、用量观测）
               ├─ mail-enhancement       邮件发送（多账号、模板、沙箱防误发）
-              └─ storage-enhancement    对象存储统一抽象（OSS/S3/本地、直传、上传守卫）
+              ├─ storage-enhancement    对象存储统一抽象（OSS/S3/本地、直传、上传守卫）
+              ├─ docs-enhancement       API 接口文档（springdoc 薄封装、分组、契约感知 schema）
+              └─ auth-enhancement       Keycloak 资源服务器鉴权（JWT 校验、角色映射、开箱安全链）
 ```
 
 ### 1.1 与 server-facility 的关系（硬性决策）
@@ -28,7 +30,7 @@
 - 依赖方式区分"**库 API 依赖**"与"**Bean 依赖**"（beacon ADR-0024 的教训）：优先只使用 facility 的静态门面 / 值类型；facility 的自动装配在消费方应用中本来就会生效，模块自身不注入 facility 的 bean，保证模块可独立测试。
 - toolbox 模块之间 **零依赖**，只共享 facility 这一个公共下游。
 
-### 1.2 五个模块一览
+### 1.2 模块一览
 
 | 模块 | artifactId | 一句话定位 | 典型场景 | 参考来源 |
 |---|---|---|---|---|
@@ -37,6 +39,8 @@
 | llm | `llm-enhancement` | 多模型注册表 + OpenAI 兼容协议薄适配，Result 化错误 | 摘要、抽取、审核、客服问答 | beacon 仅管理 spring-ai-bom，无实现；主要为业界调研 |
 | mail | `mail-enhancement` | 多账号邮件派发 + 模板渲染 + 非生产沙箱 | 通知、告警、验证码、报表投递 | beacon-message 仅空壳；基于 spring-boot-starter-mail 设计 |
 | storage | `storage-enhancement` | 对象存储统一 Seam：OSS/S3/本地三 adapter + 上传守卫 + 前端直传 | 附件、图片、导出文件 | beacon-storage（已实现，可直接移植架构） |
+| docs | `docs-enhancement` | springdoc-openapi 薄封装：配置驱动分组、契约感知（`Result` 泄漏检测/schema 命名/错误形状）、环境门禁、导出 | 消费方应用的 API 接口文档 | 自研（beacon 无对应模块，业界调研见 06 文档） |
+| auth | `auth-enhancement` | Keycloak 资源服务器鉴权：JWT 校验 + 私有角色结构映射 + 开箱安全链，零 KC 运行时依赖 | 所有需鉴权的 REST 服务 | 自研（beacon 无对应模块，调研与客户端评估见 07 文档 §2） |
 
 ---
 
@@ -241,6 +245,8 @@ XxxRegistry xxxRegistry(ObjectProvider<XxxHandler> handlers,
 | llm | `HttpClients`/`RestClient`（同步调用）、`MaskUtil`（提示词/日志脱敏）、`RateLimiterUtil`（客户端限流）、`Async`（异步）、`JsonUtil`（结构化输出解析） | 流式 SSE 用 JDK `java.net.http.HttpClient`（P2，P1 按裁定 A 未实现），见 03 文档 §2.3 |
 | mail | `Result`、`LogUtil`、`Filenames`+`MimeTyping`（附件安全校验）、`RateLimiterUtil`（发送限速）、`LocaleUtil`（多语言邮件） | 底层引擎 = spring-boot-starter-mail 的 `JavaMailSenderImpl` |
 | storage | `Result`、`Filenames`（路径穿越/危险扩展名）、`MimeTyping`（MIME 嗅探核验）、`PathIo`（仅 local adapter 目录维护——其 API 只有 deleteDirectory/directorySize，文件读写走 JDK Files；终审修正）、`LogUtil` | 架构直接移植 beacon-storage，另加上传守卫与 local adapter |
+| docs | `Result`（导出 API 返回值 + 泄漏检测的识别目标）、`web.response.BaseResponse`/`PageBaseResponse`（schema 命名修饰的识别目标）、`LogUtil` | 契约感知：识别 facility 契约类型做文档层修饰与误用告警（见 06 文档 §1 技术澄清） |
+| auth | `JsonUtil`+`BaseResponse`（401/403 响应体对齐）、`LogUtil`、`LocaleUtil`+i18n bundle、`SessionUserHolder`（opt-in 桥接目标） | P1 无 Result 返回面（无可失败 API 操作，豁免披露见 07 文档 §3）；P2 S2S 翼进场时引入 `AuthError` |
 
 **禁止清单**（任何模块不得自建）：HTTP 客户端、JSON 序列化、日志门面、缓存、分布式锁、限流器、脱敏、统一响应模型。
 
@@ -268,7 +274,9 @@ XxxRegistry xxxRegistry(ObjectProvider<XxxHandler> handlers,
 | M2 | **mail** P1 | 依赖 Boot 官方 starter，工作量可控 |
 | M3 | **database** P1（观测）→ P2（CRUD 内核） | 体量最大，靠 beacon-database 蓝本压风险 |
 | M4 | **llm** P1（同步 + 结构化输出） | 生态漂移最快，放最后以吸收最新版本 |
-| M5+ | 各模块 P2+（流式、更多 provider、多数据源…）按业务牵引排期 | 见各模块文档"演进路线" |
+| M5 | **docs** P1（springdoc 自动装配 + 分组 + 契约感知 schema + 环境门禁 + 导出） | 第六模块；依赖前五模块已定型的 `BaseResponse`/`Result` 契约作为展开目标 |
+| M6 | **auth** P1（Keycloak 资源服务器：JWT 校验 + 角色映射 + 安全链 + 错误对齐） | 第七模块；零 KC 运行时依赖，裁定 R1-R5 已拍板（07 文档 §2.4） |
+| M7+ | 各模块 P2+（流式、更多 provider、多数据源、访问守卫、S2S 客户端翼…）按业务牵引排期 | 见各模块文档"演进路线" |
 
 ---
 
@@ -293,3 +301,5 @@ XxxRegistry xxxRegistry(ObjectProvider<XxxHandler> handlers,
 - [03 llm-enhancement 设计](03-llm-enhancement.md)
 - [04 mail-enhancement 设计](04-mail-enhancement.md)
 - [05 storage-enhancement 设计](05-storage-enhancement.md)
+- [06 docs-enhancement 设计](06-docs-enhancement.md)
+- [07 auth-enhancement 设计](07-auth-enhancement.md)
