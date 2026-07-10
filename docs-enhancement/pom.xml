@@ -34,6 +34,55 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot</artifactId>
         </dependency>
+        <!-- ResultLeakDetector 直接使用 ObjectProvider/SmartInitializingSingleton（位于
+             spring-beans）；ResponseEntity 等位于 spring-web；RequestMappingHandlerMapping/
+             HandlerMethod 遍历位于 spring-webmvc——三者均为字节码直接引用，逐条显式声明。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
+        <!-- schema 转换器直接使用 JavaType/TypeFactory（jackson-databind，经 server-facility
+             的 JsonUtil 依赖传递可得，账目守卫要求直接使用必须显式声明；版本由 Boot BOM 收口）。 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- Servlet API：Filter/HttpServletRequest 编译需要，运行时由消费方容器提供，
+             故 provided（裁定 F）；spring-webmvc 的 HandlerMapping 继承链解析同样需要。 -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- springdoc/swagger 面：全部 optional（全局约束 4）——缺类时 L1 不装配、门面（core）
+             仍可加载；消费方引入 springdoc 时版本由父 pom 收口。webmvc-ui 按约束 4 不声明。 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-common</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- schema 定制器直接引用 swagger 类型（io.swagger.v3.oas.models.* 模型位于
+             swagger-models-jakarta；ModelConverter/TypeNameResolver 位于 swagger-core-jakarta），
+             版本在父 pom pin、对齐 springdoc 传递版本（裁定 F）。 -->
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-models-jakarta</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-core-jakarta</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
