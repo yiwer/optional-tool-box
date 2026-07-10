@@ -243,6 +243,15 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
             <artifactId>wiremock</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Task 6 实施实测修正（同 llm 先例同因）：本模块 test classpath 经 starter-web 带入
+             Jetty 12 系（Boot 3.5 管理），wiremock 主件内嵌 Jetty 11 起服务器会冲突失败；
+             wiremock-jetty12 经 ServiceLoader 提供 HttpServerFactory 适配，字节码不直接引用，
+             需 analyze 豁免（见下方 ignoredUnusedDeclaredDependencies）。 -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-jetty12</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- 测试铸 token（RSAKey/RSASSASigner/SignedJWT）；运行期 nimbus 经 oauth2-jose 传递，
              测试代码直接 import 需显式声明（版本由父 pom pin——Boot BOM 与 spring-security-bom
              均不管理该坐标，Task 1 实测修正，对齐 oauth2-jose 自声明传递版本 9.37.4）。 -->
@@ -315,6 +324,9 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
                                      analyze 天然看不到——同 jakarta.servlet-api 编译面依赖豁免模式
                                      （Task 5 实测修正）。 -->
                                 <ignoredUnusedDeclaredDependency>org.springframework:spring-web</ignoredUnusedDeclaredDependency>
+                                <!-- wiremock-jetty12：ServiceLoader 装配的 HttpServerFactory 扩展，
+                                     字节码层面不会被直接引用类名（同 llm 模块先例注释）。 -->
+                                <ignoredUnusedDeclaredDependency>org.wiremock:wiremock-jetty12</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
                         </configuration>
                     </execution>
@@ -2155,6 +2167,9 @@ git commit -m "auth-enhancement: 自动装配（三级 Seam + R5 fail-fast + Boo
 - Create: `auth-enhancement/src/test/java/cn/code91/toolbox/auth/integration/AuthTestApp.java`
 - Create: `auth-enhancement/src/test/java/cn/code91/toolbox/auth/integration/JwksFullChainTest.java`
 - Create: `auth-enhancement/src/test/java/cn/code91/toolbox/auth/integration/JwksUnavailableTest.java`
+- Create: `auth-enhancement/src/main/java/cn/code91/toolbox/auth/web/SecurityExceptionAdvice.java`（实施实测补件，见 Step 4b）
+- Modify: `auth-enhancement/src/main/java/cn/code91/toolbox/auth/autoconfigure/ToolboxAuthAutoConfiguration.java`（注册 advice，见 Step 4b）
+- Modify: `auth-enhancement/pom.xml`（wiremock-jetty12 test 件，Task 1 节已修正记录）
 
 **Interfaces:**
 - Consumes: Task 5 装配全量；facility `SessionUserHolder`。
@@ -2493,6 +2508,109 @@ class JwksUnavailableTest {
 ```
 
 若实测得 500：说明 JWKS 取用异常未被映射为 `AuthenticationException`（Spring 的 `JwtAuthenticationProvider` 通常把 `JwtException` 转 `InvalidBearerTokenException`，应得 401）——此时按 07 §5.4 语义修生产码（decoder 外包一层把取键失败统一转 `JwtException`），**不得**改测试断言迁就 500。
+
+- [ ] **Step 4b: SecurityExceptionAdvice（Task 6 全链矩阵实证补件，裁定方向 A）**
+
+矩阵实证发现：`@PreAuthorize` 拒绝抛出的 `AccessDeniedException` 发生在 controller 调用内，走 MVC 异常解析而非链上 ExceptionTranslationFilter——facility 的全局兜底 `@ExceptionHandler(Exception.class)`（无 @Order = LOWEST_PRECEDENCE）会把它吃成 200/500 响应体，撕破 07 §4.3"401/403 形态处处一致"承诺。补件：模块自带高优先级 advice，仅接管两类安全异常并委托既有 handler，其余异常仍归 facility；优先级留 1000 空间供消费方自有 advice 覆盖（L4 精神）；不挂 security-chain 子开关（自建链消费方同样受益，它是设计承诺组成部分而非新特性）。
+
+创建 `SecurityExceptionAdvice.java`：
+
+```java
+package cn.code91.toolbox.auth.web;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.io.IOException;
+
+/**
+ * 方法级安全异常的 MVC 层出口（Task 6 全链矩阵实证补件，07 §4.3"形态处处一致"承诺的组成部分）。
+ * {@code @PreAuthorize} 拒绝抛出的 {@link AccessDeniedException} 发生在 controller 调用内，
+ * 走 MVC 异常解析而非链上 ExceptionTranslationFilter——若无本 advice，facility 的全局兜底
+ * {@code @ExceptionHandler(Exception.class)}（默认 LOWEST_PRECEDENCE）会把它吃成 200/500。
+ * 本 advice 以高优先级抢先按 07 §4.3 形态写出 401/403，其余异常不碰（仍归 facility）。
+ * 注：web 包"实现类不引 spring-web"约束（07 §4.3）针对 EntryPoint/Filter；本类是 MVC 组件，
+ * 必然依赖 spring-web 注解（optional 编译面依赖已由 Task 5 裁定引入）。
+ */
+@RestControllerAdvice
+@Order(SecurityExceptionAdvice.ORDER)
+public class SecurityExceptionAdvice {
+
+    /** 高优先级但可被消费方超越（Ordered.HIGHEST_PRECEDENCE + 1000，L4 精神） */
+    public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 1000;
+
+    private final AuthEntryPoint entryPoint = new AuthEntryPoint();
+    private final AuthAccessDeniedHandler deniedHandler = new AuthAccessDeniedHandler();
+
+    /** 方法级授权拒绝 → 403（与链上 AuthorizationFilter 路径同形态） */
+    @ExceptionHandler(AccessDeniedException.class)
+    public void handleAccessDenied(HttpServletRequest request, HttpServletResponse response,
+                                   AccessDeniedException ex) throws IOException {
+        deniedHandler.handle(request, response, ex);
+    }
+
+    /** MVC 层认证异常（罕见：permit 路径上匿名触达受保护方法等） → 401 */
+    @ExceptionHandler(AuthenticationException.class)
+    public void handleAuthentication(HttpServletRequest request, HttpServletResponse response,
+                                     AuthenticationException ex) throws IOException {
+        entryPoint.commence(request, response, ex);
+    }
+}
+```
+
+`ToolboxAuthAutoConfiguration` 追加嵌套配置（与 SecurityChainConfiguration 平级）：
+
+```java
+    /**
+     * 方法级安全异常出口（Task 6 实证补件，07 §4.3）：@PreAuthorize 拒绝走 MVC 异常解析，
+     * 需 advice 抢在 facility 全局兜底前写出 403；非链组件，自建链（Seam 1）消费方同样受益，
+     * 故不挂 security-chain 子开关，仅 L4（自声明同类型 bean）可覆盖。
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.web.bind.annotation.RestControllerAdvice")
+    static class MvcSecurityExceptionConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public SecurityExceptionAdvice toolboxAuthSecurityExceptionAdvice() {
+            return new SecurityExceptionAdvice();
+        }
+    }
+```
+
+装配矩阵补一例（`ToolboxAuthAutoConfigurationTest`）：
+
+```java
+    @Test
+    void securityExceptionAdviceAssembledAndOverridable() {
+        webRunner.withPropertyValues(MINIMAL).run(context ->
+                assertThat(context).as("方法级安全异常出口默认装配（07 §4.3 补件）")
+                        .hasSingleBean(SecurityExceptionAdvice.class));
+        webRunner.withPropertyValues(MINIMAL)
+                .withUserConfiguration(UserAdviceConfig.class)
+                .run(context -> assertThat(context.getBean(SecurityExceptionAdvice.class))
+                        .as("L4：用户自有 advice 退让模块默认件")
+                        .isSameAs(context.getBean(UserAdviceConfig.class).advice));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserAdviceConfig {
+        SecurityExceptionAdvice advice = new SecurityExceptionAdvice();
+
+        @Bean
+        SecurityExceptionAdvice userAdvice() {
+            return advice;
+        }
+    }
+```
+
+既有矩阵用例 `preAuthorizeAllowsAndDenies`（403 + insufficient_scope + BaseResponse shape，且运行于 facility 兜底 advice 同在的上下文）即为本补件的端到端回归钉，无需另写。
 
 - [ ] **Step 5: 跑全链矩阵，逐条修复**
 
