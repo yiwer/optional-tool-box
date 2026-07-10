@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 不用 Lombok；对外无 Result 返回面（P1 无可失败 API 操作，豁免披露见 spec §3/§4.4——**不要**"顺手"加 `AuthError`）。
-- 运行时依赖零新增版本 pin（spring-security 全系 Boot BOM 管）；父 pom 仅加 `testcontainers-keycloak` test 件 pin + `<module>`。
+- 运行时依赖零新增版本 pin（spring-security 全系 Boot BOM 管）；父 pom 加 `<module>` + 两条 test 件 pin：`testcontainers-keycloak` 与 `nimbus-jose-jwt`（**Task 1 实施实测修正**：Boot BOM 与 spring-security-bom 均不管理 com.nimbusds 坐标，测试直接使用须显式声明→版本收口父 pom，对齐 oauth2-jose 6.5.7 自声明的 9.37.4，同 aliyun-java-sdk-core/tika-core 先例）。
 - jacoco 门禁 INSTRUCTION ≥ 0.80 / LINE ≥ 0.80 / BRANCH ≥ 0.70（verify 阶段）；dependency:analyze failOnWarning（豁免须带理由注释，样式同 mail/llm pom）。
 - ArchUnit 三规则：包无环；autoconfigure 不被主包依赖；core 依赖白名单（允许 spring-security-core / spring-security-oauth2-jose，禁 jakarta.servlet / spring-security-web / spring-security-config / oauth2-resource-server，spec §4.1）。
 - 测试风格：JUnit 5 + AssertJ，断言带中文 `.as(...)`；类/方法 Javadoc 中文，引用 spec 章节号（如 "07 §4.2"）。
@@ -64,6 +64,12 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
              4.1.1 默认对齐 Keycloak 26.5（其传递的 keycloak-admin-client 仅 test 作用域，
              不构成运行时 KC 依赖，07 §7）。 -->
         <testcontainers-keycloak.version>4.1.1</testcontainers-keycloak.version>
+        <!-- auth-enhancement 测试铸 token（test-only）；spring-security-oauth2-jose 以 compile
+             传递引入 nimbus-jose-jwt，但 Boot BOM 与 spring-security-bom 均不管理该坐标
+             （.m2 实测核验）——测试代码直接使用其 API（RSAKey/RSASSASigner/SignedJWT），
+             依赖账目守卫要求显式声明，版本收口于此，对齐 oauth2-jose 6.5.7 自身声明的
+             传递版本，避免漂移（同 aliyun-java-sdk-core / tika-core 先例）。 -->
+        <nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
 ```
 
 `<dependencyManagement>` 内 archunit 条目之后加：
@@ -73,6 +79,11 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
                 <groupId>com.github.dasniko</groupId>
                 <artifactId>testcontainers-keycloak</artifactId>
                 <version>${testcontainers-keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
 ```
 
@@ -228,7 +239,8 @@ git checkout master; git checkout -b feat/auth-enhancement-p1; git status --shor
             <scope>test</scope>
         </dependency>
         <!-- 测试铸 token（RSAKey/RSASSASigner/SignedJWT）；运行期 nimbus 经 oauth2-jose 传递，
-             测试代码直接 import 需显式声明（版本 Boot BOM 管）。 -->
+             测试代码直接 import 需显式声明（版本由父 pom pin——Boot BOM 与 spring-security-bom
+             均不管理该坐标，Task 1 实测修正，对齐 oauth2-jose 自声明传递版本 9.37.4）。 -->
         <dependency>
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
