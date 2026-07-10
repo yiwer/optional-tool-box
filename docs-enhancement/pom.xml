@@ -20,16 +20,31 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
-        <!-- core.DocsExposureGate#isExposed 直接使用 Environment（位于 spring-core），
-             此前仅靠 spring-boot-autoconfigure 传递引入，依赖账目守卫要求显式声明。 -->
+        <!-- core.DocsExposureGate#isExposed 直接使用 Environment、grouping 的翻译产物为
+             MapPropertySource（均位于 spring-core），此前仅靠 spring-boot-autoconfigure
+             传递引入，依赖账目守卫要求显式声明。 -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-core</artifactId>
+        </dependency>
+        <!-- DocsGroupsEnvironmentPostProcessor 直接使用 EnvironmentPostProcessor/Binder/
+             Bindable/SpringApplication（位于 spring-boot，而非 spring-boot-autoconfigure），
+             同 storage 对 @ConfigurationProperties 的声明因果。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- spring-boot-starter-test 聚合传递引入，测试代码直接 import 以下类型
+             （MockEnvironment/MockHttpServletRequest 等），依赖账目守卫要求显式声明。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -1,0 +1,7 @@
+# 全局约束 2 的唯一例外注册文件：DocsGroupsEnvironmentPostProcessor 是 EnvironmentPostProcessor
+# 而非自动装配类，需在容器构建前运行（翻译 toolbox.docs.groups.* → springdoc.group-configs[i].*，
+# 见 06 §4.3）；Spring Boot 3 对 EnvironmentPostProcessor 仍只认 META-INF/spring.factories
+#（AutoConfiguration.imports 只服务 @AutoConfiguration），此为机制必需而非破例。
+# 模块唯一装配入口仍是 ToolboxDocsAutoConfiguration（经 AutoConfiguration.imports 注册）。
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  cn.code91.toolbox.docs.grouping.DocsGroupsEnvironmentPostProcessor
