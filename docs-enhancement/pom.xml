@@ -179,6 +179,18 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 同 llm/auth 模块实测踩坑（llm pom 有完整因果注释）：部分 Windows 机器 %TEMP%
+                         为 8.3 短路径（含 "~"）时，JDK 21 NIO Selector 的 AF_UNIX 自唤醒管道
+                         connect() 失败——本模块 IT 的内嵌 Tomcat + TestRestTemplate 打开 Selector
+                         即触发（auth P1 整合门禁实测：16 个 IT 报 Unable to establish loopback
+                         connection）。显式指向 target/tmp 规避，对不受影响机器无副作用。 -->
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Djdk.net.unixdomain.tmpdir=${project.build.directory}/tmp</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
