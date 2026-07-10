@@ -32,6 +32,12 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
         </dependency>
+        <!-- Task 7 analyze 实测修正（compile-face，同 spring-web 编译面依赖模式）：
+             ToolboxAuthMessageSource() 构造 ResourceBundleMessageSource 并调用 setBasename 等方法，
+             该类实现 org.springframework.beans.factory.BeanClassLoaderAware（spring-beans 包）——
+             javac 解析其类型层级需要 spring-beans 在编译类路径，但字节码不留直接引用（未显式
+             cast/mention 该接口），dependency:analyze 判"仅 test 字节码引用"（@Autowired 字段注入）。
+             实为 main 侧编译期强需求，见下方 analyze 配置 ignoredNonTestScopedDependencies 豁免。 -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-beans</artifactId>
@@ -102,6 +108,14 @@
             <artifactId>spring-boot-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @AutoConfigureMockMvc 直接 import（Task 7 analyze 实测修正：该注解属
+             spring-boot-test-autoconfigure，此前仅靠 starter-test 传递引入未显式声明，
+             analyze 判"直接使用未声明"）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test-autoconfigure</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- MockHttpServletRequest/Response 与 MockMvc 相关类型直接 import（spring-test 为
              starter-test 实际内容件，同 mail 对 spring-boot-test 的显式声明先例）。 -->
         <dependency>
@@ -117,12 +131,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- jwt()/springSecurity() 测试后处理器（07 §9）。 -->
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- 全链测试宿主：测试用 @SpringBootApplication + @RestController 需要 MVC/内嵌容器聚合；
@@ -209,6 +217,10 @@
             <artifactId>archunit</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 日志钉测试三件（07 §7）：锁定 test 运行期日志实现与格式（logback-test.xml 消费），
+             不依赖 starter-test 传递引入的隐式版本；SLF4J ServiceLoader 绑定机制，测试代码
+             无日志断言用例、不直接 import 其 API，字节码层面天然不可见——analyze 豁免见下方
+             ignoredUnusedDeclaredDependencies（Task 7 实测修正，同 wiremock-jetty12 豁免模式）。 -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -255,7 +267,22 @@
                                 <!-- wiremock-jetty12：ServiceLoader 装配的 HttpServerFactory 扩展，
                                      字节码层面不会被直接引用类名（同 llm 模块先例注释）。 -->
                                 <ignoredUnusedDeclaredDependency>org.wiremock:wiremock-jetty12</ignoredUnusedDeclaredDependency>
+                                <!-- 日志钉测试三件：SLF4J ServiceLoader 绑定 + logback-test.xml 运行期
+                                     配置消费，测试代码未直接 import 其 API，字节码层面不可见——同上方
+                                     wiremock-jetty12 豁免模式；显式声明是为锁定 test 运行期日志实现与
+                                     格式（07 §7 设计意图），不依赖 starter-test 传递引入的隐式版本
+                                     （Task 7 analyze 实测修正）。 -->
+                                <ignoredUnusedDeclaredDependency>ch.qos.logback:logback-classic</ignoredUnusedDeclaredDependency>
+                                <ignoredUnusedDeclaredDependency>ch.qos.logback:logback-core</ignoredUnusedDeclaredDependency>
+                                <ignoredUnusedDeclaredDependency>org.slf4j:slf4j-api</ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
+                            <ignoredNonTestScopedDependencies>
+                                <!-- spring-beans：compile-face（ResourceBundleMessageSource 实现
+                                     BeanClassLoaderAware，javac 需其类型层级可解析，字节码不留直接
+                                     引用），main 侧真实编译期需求，非"仅 test 使用"，见上方 compile
+                                     依赖块注释（Task 7 实测修正）。 -->
+                                <ignoredNonTestScopedDependency>org.springframework:spring-beans</ignoredNonTestScopedDependency>
+                            </ignoredNonTestScopedDependencies>
                         </configuration>
                     </execution>
                 </executions>
