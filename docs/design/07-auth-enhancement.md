@@ -34,13 +34,13 @@
 
 | 含义 | 场景 | 评估 | 裁定 |
 |---|---|---|---|
-| ① 服务间 client_credentials（机器客户端） | 服务 A 以自己的身份调服务 B | 微服务 + Keycloak 架构的高频刚需；无会话、无重定向，风险低；Spring 标准件已有（§2.1-2），但 AuthorizedClientManager 串接、命名客户端注册表、fail-fast、错误 Result 化仍有几十行样板，模块化价值明确 | **P2**（用户拍板 R1：P1 仅资源服务器，S2S 按业务牵引再上；届时随取令牌 API 一并引入 `AuthError` sealed 类型，见 §4.4） |
+| ① 服务间 client_credentials（机器客户端） | 服务 A 以自己的身份调服务 B | 微服务 + Keycloak 架构的高频刚需；无会话、无重定向，风险低；Spring 标准件已有（§2.1-2），但 AuthorizedClientManager 串接、命名客户端注册表、fail-fast、错误 Result 化仍有几十行样板，模块化价值明确 | ~~P2~~ **不做（裁定更新 2026-07-10 用户拍板：client 端能力整体裁撤出规划）**；技术评估保留作历史记录，业务未来出现再重开裁定轮 |
 | ② 交互式登录（authorization_code / OIDC Login） | 服务端渲染页面、BFF 网关替浏览器用户登录 | 拖入完全不同的问题域：会话状态、CSRF、front/back-channel 登出传播、登录页——与本仓库无状态 REST API 定位冲突；Spring 官方配置本已很薄，再包装增值低、SecurityFilterChain 碰撞风险高 | **排除**。逃生舱：消费方自建 chain 时模块 chain 自动退让（§5.3），登录翼可完全自持 |
 | ③ Keycloak Admin Client（用户/域管理） | 管理后台程序化建用户、改角色 | 属"身份管理"而非"鉴权"，关注点不同；`keycloak-admin-client` 与 KC 服务器版本强耦合，跟版成本高 | **排除 P1**，写入演进路线（§10），业务出现再评估独立模块 |
 
 ### 2.4 裁定记录（2026-07-09 用户拍板）
 
-- **R1 客户端范围**：仅资源服务器。S2S client_credentials 翼降 P2；交互式登录与 Admin Client 排除。
+- **R1 客户端范围**：仅资源服务器。S2S client_credentials 翼降 P2；交互式登录与 Admin Client 排除。**（更新 2026-07-10 用户拍板：S2S 翼从 P2 裁撤为不做——本模块长期定位即纯资源服务器。）**
 - **R2 Realm 形态**：P1 单 realm 单 issuer；多 issuer（`JwtIssuerAuthenticationManagerResolver`）留 P2 演进位，不留死桩。
 - **R3 用户暴露**：`AuthContext` 门面（读 `SecurityContextHolder`）为正门；另提供**默认关**的桥接开关，开启后同步填充 facility `SessionUserHolder`（兼容存量习惯，符合"副作用子开关默认关"哲学）。
 - **R4 装配方式**：方案 A——`toolbox.auth.*` 自有配置域，本地派生 Keycloak 端点，自建 `JwtDecoder`，Boot 官方装配自动退让（§5.1 记录 A/B 取舍）。
@@ -56,7 +56,7 @@
 | `LocaleUtil` + 模块 i18n bundle | 401/403 消息多语言（键前缀 `toolbox.auth.`，参与 facility 聚合池） |
 | `SessionUserHolder` | opt-in 桥接目标（R3） |
 
-**Result 豁免披露（对齐全仓约定的显式记录）**：P1 对外没有"可失败的 API 操作"——401/403 是协议边界行为（filter 层写响应），`AuthContext.current()` 返回 `Optional`（未登录是常态不是错误）。故 **P1 不引入 `AuthError` sealed 类型与 Result 返回面**；P2 的 S2S 取令牌是第一个可失败 API 操作，届时按约定引入。此豁免与 database 豁免（异常语义保事务）性质不同：不是"例外"，是"尚无适用对象"。
+**Result 豁免披露（对齐全仓约定的显式记录）**：P1 对外没有"可失败的 API 操作"——401/403 是协议边界行为（filter 层写响应），`AuthContext.current()` 返回 `Optional`（未登录是常态不是错误）。故 **P1 不引入 `AuthError` sealed 类型与 Result 返回面**；P2 的 S2S 取令牌是第一个可失败 API 操作，届时按约定引入。此豁免与 database 豁免（异常语义保事务）性质不同：不是"例外"，是"尚无适用对象"。（裁定更新 2026-07-10：S2S 翼已裁撤，`AuthError` 的预定引入点随之取消——豁免长期有效，直至模块出现新的可失败 API 操作。）
 
 依赖方式遵守 00-overview §1.1：只用 facility 静态门面与值类型，不注入 facility bean，模块可独立测试。
 
@@ -304,7 +304,7 @@ jacoco 门禁沿用父 pom 80/80/70。
 
 | 阶段 | 内容 | 触发条件 |
 |---|---|---|
-| P2 | **S2S client_credentials 翼**（R1 裁定移出 P1）：命名客户端注册表 + `OAuth2ClientHttpRequestInterceptor` 挂 facility `HttpClients`/`RestClient` + 取令牌 API 返 `Result<T, AuthError>`（`AuthError` sealed 于此进场）；L1 探测 `spring-security-oauth2-client` | 出现第一个服务间调用需求 |
+| **不做**（2026-07-10 用户拍板，原 P2） | **S2S client_credentials 翼**（R1 裁定移出 P1）：命名客户端注册表 + `OAuth2ClientHttpRequestInterceptor` 挂 facility `HttpClients`/`RestClient` + 取令牌 API 返 `Result<T, AuthError>`——内容保留作历史裁定记录，client 端能力整体裁撤 | 业务未来出现再重开裁定轮 |
 | P2 | 多 issuer / 多 realm（`JwtIssuerAuthenticationManagerResolver` + 配置 registry 化） | 多租户/多环境共存需求 |
 | P2 | token relay（收到的用户 token 透传下游） | 网关/编排场景 |
 | P2 | **实施修正（Task 6 实证补件，§5.4/§4.3 呼应）**：`jwks_unavailable` 与 `invalid_token` 拆分为独立观测码（当前统一归一化为 401/`invalid_token`，见 §5.4）；`@EnableMethodSecurity` 双重声明幂等行为（消费方已自行声明时的覆盖注册语义）补专项回归钉 | 需要更细粒度 IdP 故障可观测性时；升级 Spring Security 大版本前复核该幂等假设 |
