@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClas
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.Environment;
@@ -31,9 +32,18 @@ public class ToolboxAuthFailOpenDetector {
 
     /** 探测结果（07 §5.5）：{@code presentKeys} 非空时已发出 WARN；装配矩阵借在场性断言探测器激活。 */
     public record FailOpenWarning(List<String> presentKeys) {
+        public FailOpenWarning {
+            presentKeys = List.copyOf(presentKeys);
+        }
     }
 
+    /**
+     * {@code @Lazy(false)}：全局 {@code spring.main.lazy-initialization=true} 下无人注入本 bean，
+     * 惰化 = 探测器静默失效；显式 lazyInit 使 Boot 的惰化后处理器跳过本定义（终审加固，
+     * 回归钉 {@code warnsEvenUnderGlobalLazyInitialization}）。
+     */
     @Bean
+    @Lazy(false)
     public FailOpenWarning toolboxAuthFailOpenWarning(Environment environment) {
         List<String> keys = presentAuthKeys(environment);
         if (!keys.isEmpty()) {
