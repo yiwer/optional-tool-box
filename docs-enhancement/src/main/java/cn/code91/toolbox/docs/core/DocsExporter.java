@@ -5,6 +5,9 @@ import cn.code91.facility.result.Result;
 /**
  * OpenAPI spec 导出 Seam（06 §4.1，L4：默认实现挂 {@code @ConditionalOnMissingBean}，
  * 应用可整体替换）。
+ *
+ * <p>默认实现依赖绑定中的请求上下文（{@code RequestContextHolder}，server URL 计算所需）：
+ * 非请求线程（如定时任务）编程式调用返回 {@code Err(ExportFailed)}。</p>
  */
 public interface DocsExporter {
 

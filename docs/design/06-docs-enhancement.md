@@ -240,7 +240,7 @@ switch (spec) {
 | 阶段 | 内容 |
 |---|---|
 | P1 | springdoc 自动装配 + 配置驱动分组（属性翻译层）+ Info/安全方案/服务器列表配置 + 契约感知三件事（`Result` 泄漏检测告警、`BaseResponse`/`PageBaseResponse` schema 命名修饰、通用错误形状文档）+ 环境门禁（请求期过滤）+ JSON/YAML/Postman 导出 |
-| P2 | `DocsAccessGuard` SPI（Basic Auth / IP 白名单，保护文档与导出端点的"谁能看"）；泄漏检测 `strict` 模式（告警升级为启动失败，配置项预留在 `contract-awareness` 下）；knife4j UI 深度集成；按 endpoint 声明具体业务错误变体的注解式枚举（依赖跨模块错误码体系先成熟） |
+| P2 | `DocsAccessGuard` SPI（Basic Auth / IP 白名单，保护文档与导出端点的"谁能看"）；泄漏检测 `strict` 模式（告警升级为启动失败，配置项预留在 `contract-awareness` 下）；knife4j UI 深度集成；按 endpoint 声明具体业务错误变体的注解式枚举（依赖跨模块错误码体系先成熟）；swagger-ui 自定义子目录资产根的门禁覆盖（`springdoc.swagger-ui.path` 配到子目录时 UI 静态资源根迁移到 `{父目录}/swagger-ui/**`，超出 P1 七条 pattern）；`springdoc.use-management-port=true` 管理端口模式披露（P1 门禁的 Servlet 过滤器对其不生效）；security-scheme 字段完备性（`apiKey` 的 `name`/`in`、`oauth2` 的 `flows`——P1 仅完整支持 `http(bearer)` 形态，见 §6 范围澄清）；springdoc 升级时须复核 grouped export 的 servers[] 与内部 `getServerUrl` 长度算术的耦合（`SpringdocDocsExporter.groupAdjustedApiDocsUrl`） |
 | P3 | 版本快照与 diff（**不复用** compare-enhancement——模块间零依赖约束，需自研轻量 JSON 结构差异）；桶/域级更细粒度的分组能力对齐（如随 database 的多数据源演进） |
 | P4（观望） | WebFlux 支持；多服务文档聚合门户（独立仓库形态，非本模块范围） |
 

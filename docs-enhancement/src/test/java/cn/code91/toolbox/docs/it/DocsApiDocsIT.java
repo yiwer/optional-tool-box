@@ -123,7 +123,8 @@ class DocsApiDocsIT {
 
     @Test
     void illegalFormatValueIs400WithBaseResponseErrorShape() throws Exception {
-        // 裁定 E：枚举绑定失败经控制器级 @ExceptionHandler 收敛，此测试钉住实际形态。
+        // 裁定 E：format 经 DocsExportController 手工大小写不敏感 String 解析（Spring MVC 枚举
+        // 绑定大小写敏感，不走枚举绑定），非法值由显式分支给出确定的 400 形态，此测试钉住。
         ResponseEntity<String> response =
                 restTemplate.getForEntity("/toolbox/docs/export?format=bogus", String.class);
 
