@@ -33,13 +33,19 @@ public final class AuthContext {
         return current().isPresent();
     }
 
-    /** {@return 是否拥有指定 realm 角色}（原始名，不带 ROLE_ 前缀） */
+    /** {@return 是否拥有指定 realm 角色}（原始名，不带 ROLE_ 前缀；null 入参恒 false——不可变集合 contains(null) 抛 NPE，Task 2 审查修正） */
     public static boolean hasRole(String realmRole) {
+        if (realmRole == null) {
+            return false;
+        }
         return current().map(u -> u.realmRoles().contains(realmRole)).orElse(false);
     }
 
-    /** {@return 是否拥有指定 client 的角色}（读 resource_access 原始结构，无跨 client 重名歧义） */
+    /** {@return 是否拥有指定 client 的角色}（读 resource_access 原始结构，无跨 client 重名歧义；null 入参恒 false，同上） */
     public static boolean hasClientRole(String clientId, String role) {
+        if (clientId == null || role == null) {
+            return false;
+        }
         return current()
                 .map(u -> u.clientRoles().getOrDefault(clientId, Set.of()).contains(role))
                 .orElse(false);

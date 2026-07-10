@@ -73,4 +73,33 @@ class AuthContextTest {
         assertThat(AuthContext.hasClientRole("toolbox-api", "x")).isFalse();
         assertThat(AuthContext.hasClientRole("nope", "doc-reader")).isFalse();
     }
+
+    @Test
+    void nullValuedClaimAndNullArgumentsAreNeverErrors() {
+        // Task 2 审查修正回归钉：JSON null 经解码可合法落入 claims；null 入参走"无匹配"语义。
+        Jwt withNullClaim = Jwt.withTokenValue("t").header("alg", "RS256").subject("sub-2")
+                .claim("preferred_username", "bob")
+                .claim("custom_nullable", null)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        TestingAuthenticationToken auth = new TestingAuthenticationToken(withNullClaim, "n/a");
+        auth.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        CurrentUser user = AuthContext.current()
+                .orElseThrow(() -> new AssertionError("null 值 claim 不得使适配失败（07 §3 常态而非错误）"));
+        assertThat(user.rawClaims()).as("null 值 claim 视同缺失剔除").doesNotContainKey("custom_nullable");
+        assertThat(AuthContext.hasRole(null)).as("null 角色名恒 false 而非 NPE").isFalse();
+        assertThat(AuthContext.hasClientRole(null, "r")).isFalse();
+        assertThat(AuthContext.hasClientRole("c", null)).isFalse();
+    }
+
+    @Test
+    void usernameFallsBackToSubWhenBlank() {
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("sub-3")
+                .claim("dummy", "x")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(CurrentUser.from(jwt, " ").username())
+                .as("username 空白回落 sub（07 §4.1）").isEqualTo("sub-3");
+        assertThat(CurrentUser.from(jwt, null).username()).isEqualTo("sub-3");
+    }
 }

@@ -24,7 +24,7 @@ public final class KeycloakClaims {
         return rolesOf(jwt.getClaim("realm_access"));
     }
 
-    /** {@return resource_access 下全部 client → 角色集}（07 §4.1：读原始结构，不受映射白名单限制） */
+    /** {@return resource_access 下全部 client → 角色集}（07 §4.1：读原始结构，不受映射白名单限制；角色集为空的 client 条目不出现在结果中） */
     public static Map<String, Set<String>> clientRoles(Jwt jwt) {
         Object resourceAccess = jwt.getClaim("resource_access");
         if (!(resourceAccess instanceof Map<?, ?> byClient)) {
